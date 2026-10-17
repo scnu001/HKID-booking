@@ -479,19 +479,54 @@ def _emit(cfg, new_items, now, prev_fp=None, fp=None, quiet=False):
                 star = "★指定日 " if first.get("focus") else ""
                 title = ("★ 指定日期有名额！" if first.get("focus")
                          else "香港身份证有名额！")
+                body = (f"{len(new_items)} 个名额\n"
+                        f"{star}{first['officeName']} {first['dateObj']} "
+                        f"（{first['hoursCn']}·{first['stateCn']}）\n")
+                # 把资料备忘里要填的东西直接列在弹窗里，
+                # 这样不用切窗口翻资料，照着填就行
+                prof = load_profile()
+                clip_text = ""
+                memo = []
+                if prof.get("permit_last6"):
+                    clip_text = prof["permit_last6"]
+                    memo.append(f"通行证后6位：{clip_text}")
+                if prof.get("evisa_ref"):
+                    memo.append(f"e-Visa编号：{prof['evisa_ref']}")
+                bd = ""
+                if prof.get("birth_d") and prof.get("birth_y"):
+                    bd = f"{prof['birth_d']} / {prof['birth_y']}"
+                    memo.append(f"出生日/年：{bd}")
+                if prof.get("query_code"):
+                    memo.append(f"查询编号：{prof['query_code']}")
+                if memo:
+                    body += "\n" + "\n".join(memo) + "\n"
+                hint = ("点「确定」→ 自动复制后6位并打开预约页"
+                        if clip_text else "点「确定」→ 打开预约页")
+                body += f"\n{hint}\n（点「取消」或 20 秒不操作则不跳转）"
+
+                def _go(_clip=clip_text):
+                    """用户点确定后：先复制号码，再打开预约页。"""
+                    if _clip:
+                        notifier.set_clipboard(_clip)
+                        log(f"已复制通行证后6位到剪贴板", "ALERT")
+                    try:
+                        webbrowser.open(W.BOOKING_URL, new=2)
+                        log(f"已打开预约页: {W.BOOKING_URL}", "ALERT")
+                    except Exception as e:
+                        log(f"打开预约页失败: {e}", "ERROR")
+
                 ok, how = notifier.notify(
-                    title,
-                    f"{len(new_items)} 个名额\n"
-                    f"{star}{first['officeName']} {first['dateObj']} "
-                    f"（{first['hoursCn']}·{first['stateCn']}）\n\n"
-                    f"（点确定后去抢，或按 B 键）",
-                    sound=n.get("sound", True))
+                    title, body,
+                    sound=n.get("sound", True),
+                    on_confirm=_go)
                 if ok:
                     log(f"提醒已发出 -> {how}", "ALERT")
                     with _state_lock:
                         STATE["notification_test"] = f"成功: {how}"
+                elif "跳过" in how:
+                    # 90 秒冷却中：事件已记录，只是不重复弹窗，不是失败
+                    log(f"提醒冷却中，本次不重复弹窗 -> {how}", "INFO")
                 else:
-                    # 以前这里是静默吞掉异常 -> 弹窗失败也显示「已发送」
                     log(f"★ 提醒失败: {how}", "ERROR")
                     with _state_lock:
                         STATE["notification_test"] = "失败: " + str(how)[:200]
@@ -505,11 +540,8 @@ def _emit(cfg, new_items, now, prev_fp=None, fp=None, quiet=False):
                 log(f"响铃: {'成功' if ok else '失败'}", "INFO")
             except Exception as e:
                 log(f"响铃异常: {e}", "WARN")
-        if n.get("open_browser"):
-            try:
-                webbrowser.open(W.BOOKING_URL)
-            except Exception:
-                pass
+        # open_browser 已并入弹窗的「点确定」动作，这里不再自动开，
+        # 否则会和弹窗里点确定打开的那次重复开两个标签页
     else:
         log("处于免打扰时段，本次不打扰", "INFO")
 
@@ -925,12 +957,29 @@ class Handler(BaseHTTPRequestHandler):
             how = ""
             try:
                 if n.get("desktop"):
+                    prof = load_profile()
+                    clip = prof.get("permit_last6") or ""
+
+                    def _test_go(_c=clip):
+                        if _c:
+                            notifier.set_clipboard(_c)
+                        try:
+                            webbrowser.open(W.BOOKING_URL, new=2)
+                        except Exception:
+                            pass
+
+                    extra = ""
+                    if clip:
+                        extra = (f"\n\n资料里的通行证后6位：{clip}\n"
+                                 f"点确定后会复制它并打开预约页。")
                     ok, how = notifier.notify(
                         "香港身份证预约监控 · 测试",
                         "这是一条测试提醒\n\n"
-                        "看到这个窗口 + 听到提示音 = 提醒链路正常。\n"
-                        "（20 秒后自动关闭）",
-                        sound=n.get("sound", True), force=True)
+                        "看到窗口 + 听到提示音 = 提醒链路正常。"
+                        + extra
+                        + "\n（20 秒后自动关闭）",
+                        sound=n.get("sound", True), force=True,
+                        on_confirm=_test_go)
                 elif n.get("sound"):
                     ok = notifier.beep(3)
                     how = "beep"

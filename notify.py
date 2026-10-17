@@ -66,6 +66,8 @@ MB_SYSTEMMODAL = 0x00001000
 
 _lock = threading.Lock()
 _last_box = {"at": 0.0}
+# 两次弹窗的最小间隔（秒）。放号后数据会有多轮抖动，太短会连续弹很多次。
+_min_gap = 90.0
 
 
 # ---------------------------------------------------------------- 声音
@@ -97,10 +99,107 @@ def play_sound(strong=True):
 
 
 # ---------------------------------------------------------------- 弹窗
-def _message_box_timeout(title, message, timeout_ms=20000, topmost=True):
+def set_clipboard(text):
+    """把文本放进剪贴板（Win32 直接操作，不依赖 PowerShell）。
+
+    有票时把「通行证后 6 位」自动放进剪贴板，用户切到预约页直接 Ctrl+V。
+
+    ⚠️ 64 位 Python 的坑：ctypes 默认把函数返回值当 c_int(32位)，
+    而 GlobalAlloc/GlobalLock 返回的是**指针**，会被截断成无效值，
+    导致 SetClipboardData 失败但没有任何报错。必须显式声明 restype。
+    """
+    if _user32 is None or not text:
+        return False
+    try:
+        k = ctypes.WinDLL("kernel32", use_last_error=True)
+        u = _user32
+    except Exception:
+        return False
+
+    CF_UNICODETEXT = 13
+    GMEM_MOVEABLE = 0x0002
+
+    k.GlobalAlloc.restype = ctypes.c_void_p
+    k.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
+    k.GlobalLock.restype = ctypes.c_void_p
+    k.GlobalLock.argtypes = [ctypes.c_void_p]
+    k.GlobalUnlock.argtypes = [ctypes.c_void_p]
+    k.GlobalFree.argtypes = [ctypes.c_void_p]
+    u.OpenClipboard.argtypes = [ctypes.c_void_p]
+    u.EmptyClipboard.argtypes = []
+    u.SetClipboardData.restype = ctypes.c_void_p
+    u.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
+    u.CloseClipboard.argtypes = []
+
+    # 剪贴板可能被别的程序短暂占用，重试几次
+    opened = False
+    for _ in range(6):
+        if u.OpenClipboard(None):
+            opened = True
+            break
+        time.sleep(0.08)
+    if not opened:
+        return False
+    try:
+        u.EmptyClipboard()
+        data = str(text)
+        size = (len(data) + 1) * ctypes.sizeof(ctypes.c_wchar)
+        h = k.GlobalAlloc(GMEM_MOVEABLE, size)
+        if not h:
+            return False
+        p = k.GlobalLock(h)
+        if not p:
+            k.GlobalFree(h)
+            return False
+        ctypes.memmove(p, ctypes.create_unicode_buffer(data), size)
+        k.GlobalUnlock(h)
+        # SetClipboardData 成功后所有权归系统，不能再 GlobalFree
+        if not u.SetClipboardData(CF_UNICODETEXT, h):
+            k.GlobalFree(h)
+            return False
+        return True
+    except Exception:
+        return False
+    finally:
+        u.CloseClipboard()
+
+
+def get_clipboard():
+    """读回剪贴板文本（自检用）。"""
+    if _user32 is None:
+        return None
+    try:
+        k = ctypes.WinDLL("kernel32", use_last_error=True)
+        k.GlobalLock.restype = ctypes.c_void_p
+        k.GlobalLock.argtypes = [ctypes.c_void_p]
+        k.GlobalUnlock.argtypes = [ctypes.c_void_p]
+        _user32.OpenClipboard.argtypes = [ctypes.c_void_p]
+        _user32.GetClipboardData.restype = ctypes.c_void_p
+        _user32.GetClipboardData.argtypes = [ctypes.c_uint]
+        if not _user32.OpenClipboard(None):
+            return None
+        try:
+            h = _user32.GetClipboardData(13)
+            if not h:
+                return None
+            p = k.GlobalLock(h)
+            if not p:
+                return None
+            val = ctypes.c_wchar_p(p).value
+            k.GlobalUnlock(h)
+            return val
+        finally:
+            _user32.CloseClipboard()
+    except Exception:
+        return None
+
+
+def _message_box_timeout(title, message, timeout_ms=20000, topmost=True,
+                         on_confirm=None):
     """调 MessageBoxTimeoutW（user32 里的隐藏导出，XP 至今都可用）。
 
     返回 (ok, 说明)。ok=True 表示窗口确实被创建并显示过。
+    on_confirm: 用户点「确定」后要执行的回调（超时自动关不触发）。
     """
     if _user32 is None:
         return False, "non-windows"
@@ -117,26 +216,42 @@ def _message_box_timeout(title, message, timeout_ms=20000, topmost=True):
         r = fn(None, message, title, flags, 0, timeout_ms)
     except Exception as e:
         return False, f"{type(e).__name__}: {e}"
-    # 0=IDOK 点了确定；32000=超时自动关（说明窗口显示过，用户没点）
-    if r in (0, 32000):
-        return True, ("用户已确认" if r == 0 else "显示后超时关闭")
+    # MessageBox 返回值：IDOK=1、IDCANCEL=2、超时=32000（不是 0！）
+    # 早期版本误写成 `r == 0`，导致点确定永远不触发回调。
+    IDOK, IDCANCEL, TIMEOUT = 1, 2, 32000
+    if r == IDOK:
+        if on_confirm:
+            try:
+                on_confirm()
+            except Exception:
+                pass
+        return True, "用户点了确定"
+    if r == IDCANCEL:
+        return True, "用户点了取消"
+    if r == TIMEOUT:
+        return True, "显示后超时自动关闭"
     return True, f"返回 {r}"
 
 
-def _popup_async(title, message, timeout_ms=20000, verify=True, force=False):
+def _popup_async(title, message, timeout_ms=20000, verify=True, force=False,
+                 on_confirm=None):
     """在独立线程里弹窗，避免阻塞轮询主循环。
 
     verify=True 时会用 FindWindowW 去**探测窗口是否真的出现在屏幕上**，
     探测到才返回 True。这是「真的可见」而不是「线程启动了」。
-    force=True 跳过 20 秒防刷屏限制（测试按钮用）。
+    force=True 跳过防刷屏限制（测试按钮用）。
+    on_confirm: 用户点「确定」后执行的回调（复制剪贴板 + 打开预约页）。
     """
     with _lock:
-        # 20 秒内不重复弹，防止放号时刷屏
-        if not force and time.time() - _last_box["at"] < 20:
-            return False, "刚刚弹过，跳过"
+        # 防刷屏：默认 90 秒内不再弹。
+        # 放号时数据会有多轮抖动（有人抢/退），20 秒太短，会连着弹好几次。
+        gap = 0 if force else _min_gap
+        if not force and time.time() - _last_box["at"] < gap:
+            return False, f"{gap}秒内刚弹过，跳过"
         _last_box["at"] = time.time()
     t = threading.Thread(
-        target=_safe_box, args=(title, message, timeout_ms), daemon=True)
+        target=_safe_box, args=(title, message, timeout_ms, on_confirm),
+        daemon=True)
     t.start()
     if not verify or _user32 is None:
         return True, "已弹出"
@@ -152,9 +267,10 @@ def _popup_async(title, message, timeout_ms=20000, verify=True, force=False):
     return False, "窗口未出现(可能被系统拦截)"
 
 
-def _safe_box(title, message, timeout_ms):
+def _safe_box(title, message, timeout_ms, on_confirm=None):
     try:
-        _message_box_timeout(title, message, timeout_ms)
+        _message_box_timeout(title, message, timeout_ms,
+                             on_confirm=on_confirm)
     except Exception as e:
         print(f"[notify] 弹窗线程异常: {e}", file=sys.stderr)
 
@@ -199,12 +315,13 @@ def _toast(title, message):
 
 
 # ---------------------------------------------------------------- 对外接口
-def notify(title, message, sound=True, force=False):
+def notify(title, message, sound=True, force=False, on_confirm=None):
     """主入口：先响，再弹，最后补 toast。
 
     返回 (ok, 方式说明)。ok 的含义是「至少有一条通道真的触发了」，
     不再是「Popen 没报错」那种假回执。
     force=True 用于测试按钮，跳过防刷屏限制。
+    on_confirm: 用户点「确定」后执行（复制剪贴板 + 打开预约页）。
     """
     ways = []
     oks = []
@@ -215,7 +332,8 @@ def notify(title, message, sound=True, force=False):
         ways.append("声音:" + how)
         time.sleep(0.35)          # 让响声先出来，再弹窗
 
-    ok, how = _popup_async(title, message, force=force)
+    ok, how = _popup_async(title, message, force=force,
+                           on_confirm=on_confirm)
     oks.append(ok)
     ways.append("弹窗:" + how)
 
