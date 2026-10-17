@@ -1,0 +1,36 @@
+# ===== 隐私数据，绝对不能提交 =====
+# 预约资料备忘：含身份证明文件号码、e-Visa 档案编号
+profile.json
+profile.json.tmp
+profile.*.json
+
+# 运行时配置：每个人的办事处/间隔/指定日期都不同
+config.json
+config.json.tmp
+
+# 日志：含探测记录、放号历史、可能含个人操作痕迹
+logs/
+*.log
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ===== 编辑器 / 系统 =====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== 临时文件 =====
+*.tmp
+*.bak
+*.swp
+_*.mjs
+_*.py
+node_modules/

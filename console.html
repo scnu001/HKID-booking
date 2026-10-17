@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>香港身份证预约监控</title>
+<style>
+  :root{
+    --bg:#f5f7fa; --card:#ffffff; --line:#e3e8ef; --line2:#eef2f7;
+    --txt:#1f2733; --txt2:#5a6675; --txt3:#8b97a6;
+    --blue:#2563eb; --blue-d:#1d4ed8; --blue-l:#eff4ff;
+    --green:#16a34a; --green-l:#e9f9ef;
+    --amber:#d97706; --amber-l:#fff7e6;
+    --red:#dc2626; --red-l:#fef2f2;
+    --gray:#cbd5e1; --radius:10px;
+    --shadow:0 1px 3px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:"Microsoft YaHei UI","Microsoft YaHei","Segoe UI",
+                -apple-system,BlinkMacSystemFont,"PingFang SC",
+                "Noto Sans CJK SC","Source Han Sans SC",sans-serif;
+    background:var(--bg); color:var(--txt); line-height:1.6;
+    font-size:14px; padding:0 0 40px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+
+  /* header */
+  header{
+    background:var(--card);border-bottom:1px solid var(--line);
+    padding:14px 0;margin-bottom:20px;position:sticky;top:0;z-index:20;
+  }
+  .hd{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  h1{font-size:17px;font-weight:650;letter-spacing:-.01em}
+  .sub{font-size:12.5px;color:var(--txt3)}
+  .spacer{flex:1}
+  .pill{
+    display:inline-flex;align-items:center;gap:6px;padding:4px 11px;
+    border-radius:999px;font-size:12.5px;font-weight:500;
+    background:var(--gray-l,#f1f5f9);color:var(--txt2);
+  }
+  .pill.on{background:var(--green-l);color:var(--green)}
+  .pill.off{background:var(--red-l);color:var(--red)}
+  .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+  .dot.live{animation:pulse 1.8s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  /* layout */
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+
+  .card{
+    background:var(--card);border:1px solid var(--line);
+    border-radius:var(--radius);box-shadow:var(--shadow);
+    padding:18px 20px;margin-bottom:16px;
+  }
+  .card h2{
+    font-size:13px;font-weight:650;color:var(--txt2);text-transform:none;
+    letter-spacing:.02em;margin-bottom:14px;display:flex;
+    align-items:center;gap:8px;
+  }
+  .card h2 .n{
+    background:var(--blue-l);color:var(--blue);font-size:11px;
+    padding:1px 7px;border-radius:999px;font-weight:600;
+  }
+
+  /* offices */
+  .off{display:flex;flex-direction:column;gap:8px}
+  .of{
+    display:flex;align-items:center;gap:11px;padding:11px 13px;
+    border:1.5px solid var(--line);border-radius:8px;cursor:pointer;
+    transition:.13s;user-select:none;background:var(--card);
+  }
+  .of:hover{border-color:var(--blue);background:var(--blue-l)}
+  .of.sel{border-color:var(--blue);background:var(--blue-l)}
+  .of .box{
+    width:17px;height:17px;border-radius:4px;border:1.5px solid var(--line);
+    display:grid;place-items:center;flex-shrink:0;background:#fff;
+  }
+  .of.sel .box{background:var(--blue);border-color:var(--blue)}
+  .of .box svg{width:11px;height:11px;stroke:#fff;stroke-width:3.5;
+    fill:none;opacity:0}
+  .of.sel .box svg{opacity:1}
+  .of .nm{font-weight:600;font-size:13.5px;white-space:nowrap}
+  .of .tag{
+    margin-left:auto;font-size:11.5px;color:var(--txt3);
+    font-variant-numeric:tabular-nums;
+  }
+  .of .tag b{color:var(--blue);font-weight:650}
+
+  /* fields */
+  .fld{margin-bottom:16px}
+  .fld:last-child{margin-bottom:0}
+  .lbl{font-size:12.5px;color:var(--txt2);margin-bottom:7px;
+    display:flex;align-items:center;gap:6px}
+  .lbl .hint{color:var(--txt3);font-size:11.5px;margin-left:auto}
+  input[type=number],input[type=time],select{
+    width:100%;padding:8px 11px;border:1.5px solid var(--line);
+    border-radius:7px;font-size:13.5px;font-family:inherit;
+    background:var(--card);color:var(--txt);
+  }
+  input:focus,select:focus{outline:none;border-color:var(--blue)}
+  .rng{display:flex;gap:7px;flex-wrap:wrap}
+  .rng button{
+    padding:7px 13px;border:1.5px solid var(--line);background:var(--card);
+    border-radius:7px;font-size:13px;cursor:pointer;font-family:inherit;
+    color:var(--txt2);transition:.13s;font-weight:500;
+  }
+  .rng button:hover{border-color:var(--blue);color:var(--blue)}
+  .rng button.sel{background:var(--blue);border-color:var(--blue);color:#fff}
+
+  /* toggles */
+  .tog{
+    display:flex;align-items:center;gap:11px;padding:10px 0;
+    border-bottom:1px solid var(--line2);
+  }
+  .tog:last-child{border-bottom:none}
+  .tog .tx{flex:1}
+  .tog .tx b{display:block;font-size:13.5px;font-weight:600}
+  .tog .tx span{font-size:12px;color:var(--txt3)}
+  .sw{
+    width:38px;height:21px;border-radius:999px;background:var(--gray);
+    position:relative;cursor:pointer;transition:.16s;flex-shrink:0;
+  }
+  .sw.on{background:var(--blue)}
+  .sw::after{
+    content:'';position:absolute;top:2.5px;left:2.5px;width:16px;height:16px;
+    border-radius:50%;background:#fff;transition:.16s;
+    box-shadow:0 1px 3px rgba(0,0,0,.2);
+  }
+  .sw.on::after{transform:translateX(17px)}
+
+  /* buttons */
+  .btns{display:flex;gap:9px;flex-wrap:wrap}
+  button.b{
+    padding:9px 17px;border:none;border-radius:7px;font-size:13.5px;
+    font-family:inherit;font-weight:600;cursor:pointer;transition:.13s;
+  }
+  button.b.pri{background:var(--blue);color:#fff}
+  button.b.pri:hover{background:var(--blue-d)}
+  button.b.sec{background:var(--card);color:var(--txt2);
+    border:1.5px solid var(--line)}
+  button.b.sec:hover{border-color:var(--blue);color:var(--blue)}
+  button.b:disabled{opacity:.5;cursor:not-allowed}
+  button.b.book{
+    background:linear-gradient(135deg,#16a34a,#0d9488);color:#fff;
+    box-shadow:0 3px 12px rgba(22,163,74,.32);
+    white-space:nowrap;
+  }
+  button.b.book:hover{filter:brightness(1.08)}
+  button.b.book:active{transform:translateY(1px)}
+  button.b.change{
+    background:linear-gradient(135deg,#2563eb,#4f46e5);color:#fff;
+    box-shadow:0 3px 12px rgba(37,99,235,.3);
+    white-space:nowrap;
+  }
+  button.b.change:hover{filter:brightness(1.08)}
+  button.b.change:active{transform:translateY(1px)}
+
+  /* 入口指引条 */
+  .guide{
+    display:none;margin-bottom:14px;padding:13px 16px;border-radius:10px;
+    background:var(--blue-l);border:1.5px solid rgba(37,99,235,.28);
+    color:#1e40af;font-size:12.5px;line-height:1.7;
+  }
+  .guide.on{display:block}
+  .guide b{font-size:13.5px;display:block;margin-bottom:4px}
+  .guide .gx{
+    float:right;cursor:pointer;font-weight:700;opacity:.5;
+    padding:0 4px;font-size:16px;line-height:1;
+  }
+  .guide .gx:hover{opacity:1}
+  .guide ol{margin:6px 0 0 18px;padding:0}
+  .guide li{margin:2px 0}
+  .guide .hit{background:#fde68a;padding:1px 5px;border-radius:4px;
+    font-weight:700;color:#92400e}
+
+  /* 指定日期必盯 */
+  .foc{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+  .fchip{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:5px 8px 5px 11px;border-radius:999px;font-size:12.5px;
+    background:rgba(22,163,74,.12);color:#15803d;
+    border:1.5px solid rgba(22,163,74,.35);font-weight:600;
+    white-space:nowrap;
+  }
+  .fchip.imminent{background:rgba(220,38,38,.1);color:#b91c1c;
+    border-color:rgba(220,38,38,.35)}
+  .fchip .x{cursor:pointer;font-weight:700;opacity:.55;font-size:14px;
+    line-height:1;padding:0 2px}
+  .fchip .x:hover{opacity:1}
+  .fchip .dd{font-size:11px;opacity:.8;font-weight:500}
+  .foc .none{font-size:12.5px;color:var(--txt3);padding:5px 0}
+
+  /* 日期表选择器 */
+  .cal{margin-top:10px;border:1px solid var(--line);border-radius:9px;
+    overflow:hidden}
+  .cal .calhead{display:flex;align-items:center;gap:8px;padding:9px 11px;
+    background:var(--blue-l);font-size:12.5px;color:var(--txt2);
+    border-bottom:1px solid var(--line);font-weight:600}
+  .cal .calbody{padding:11px}
+  .cal .mrow{display:flex;align-items:center;gap:5px;margin-bottom:7px;
+    flex-wrap:wrap}
+  .cal .mlab{font-size:11px;color:var(--txt3);width:34px;flex-shrink:0;
+    font-weight:700}
+  .dchip{
+    width:30px;height:30px;border-radius:7px;border:1.5px solid var(--line);
+    background:var(--card);cursor:pointer;font-size:11.5px;font-family:inherit;
+    color:var(--txt2);display:flex;align-items:center;justify-content:center;
+    transition:.12s;font-weight:600;padding:0;position:relative;
+  }
+  .dchip:hover{border-color:var(--blue);color:var(--blue);transform:translateY(-1px)}
+  .dchip.on{background:#16a34a;border-color:#16a34a;color:#fff;
+    box-shadow:0 2px 7px rgba(22,163,74,.35)}
+  .dchip.wknd{background:#f4f5f7;color:var(--txt3)}
+  .dchip.wknd.on{background:#16a34a;color:#fff}
+  .dchip.today{box-shadow:0 0 0 2px rgba(37,99,235,.45)}
+  .dchip.on.today{box-shadow:0 0 0 2px rgba(22,163,74,.6),0 2px 7px rgba(22,163,74,.35)}
+  .dchip .av{position:absolute;bottom:2px;left:0;right:0;text-align:center;
+    font-size:8px;line-height:8px;font-weight:700}
+  .dchip.on .av{color:rgba(255,255,255,.85)}
+  .dchip .av.g{color:#16a34a}
+  .dchip .av.y{color:#d97706}
+  .callegend{display:flex;gap:12px;font-size:11.5px;color:var(--txt3);
+    margin-top:9px;flex-wrap:wrap;align-items:center}
+  .callegend i{display:inline-block;width:9px;height:9px;border-radius:2px;
+    margin-right:4px;vertical-align:middle}
+
+  /* stats */
+  .boost{
+    margin-top:9px;padding:8px 11px;border-radius:7px;font-size:12.5px;
+    background:rgba(220,38,38,.08);color:#b91c1c;
+    border:1px solid rgba(220,38,38,.25);display:none;
+  }
+  .boost.on{display:block}
+
+  /* 维护横幅 */
+  .maint{
+    display:none;margin-bottom:14px;padding:14px 17px;border-radius:10px;
+    background:linear-gradient(135deg,rgba(220,38,38,.09),rgba(234,88,12,.09));
+    border:1.5px solid rgba(220,38,38,.32);color:#b91c1c;
+  }
+  .maint.on{display:block}
+  .maint b{font-size:14px;display:block;margin-bottom:5px}
+  .maint .mtxt{font-size:12.5px;line-height:1.65;color:#7f1d1d}
+  .maint .mact{margin-top:9px;display:flex;gap:8px;flex-wrap:wrap}
+  .maint .mact button{
+    padding:6px 13px;border-radius:6px;border:1.5px solid rgba(220,38,38,.4);
+    background:#fff;color:#b91c1c;font-size:12.5px;font-family:inherit;
+    cursor:pointer;font-weight:600;
+  }
+  .maint .mact button:hover{background:#fef2f2}
+
+  /* stats */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;
+    margin-bottom:16px}
+  @media(max-width:760px){.stats{grid-template-columns:repeat(2,1fr)}}
+  .st{background:var(--card);border:1px solid var(--line);
+    border-radius:var(--radius);padding:13px 15px;box-shadow:var(--shadow)}
+  .st .k{font-size:11.5px;color:var(--txt3);margin-bottom:3px}
+  .st .v{font-size:19px;font-weight:680;letter-spacing:-.02em;
+    font-variant-numeric:tabular-nums}
+  .st .v.sm{font-size:14px;font-weight:600;padding-top:3px}
+  .st .v.ok{color:var(--green)} .st .v.warn{color:var(--amber)}
+  .st .v.mut{color:var(--txt3);font-size:13px}
+
+  /* legend + grid */
+  .lgd{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:13px;
+    font-size:12.5px;color:var(--txt2)}
+  .lgd i{width:10px;height:10px;border-radius:2.5px;
+    display:inline-block;margin-right:5px;vertical-align:-1px}
+  .gt{overflow-x:auto;padding-bottom:6px}
+  .gt table{border-collapse:separate;border-spacing:2px;font-size:12px}
+  .gt th{
+    font-weight:500;color:var(--txt3);font-size:10.5px;
+    padding:0 0 5px;text-align:center;white-space:nowrap;
+    width:23px;min-width:23px;
+  }
+  .gt td{padding:0;width:23px;min-width:23px}
+  .gt th.foc{color:#15803d;font-weight:800}
+  .gt th.foc i{font-style:normal;display:block;font-size:8px;
+    line-height:8px;color:#16a34a}
+  .gt td.foc{background:rgba(22,163,74,.09)}
+  .gt td.foc .cell{box-shadow:0 0 0 1.5px rgba(22,163,74,.5)}
+  /* 两个时段都有票：右半边金条 */
+  .cell.both::after{
+    content:'';position:absolute;right:0;top:0;bottom:0;width:5px;
+    background:linear-gradient(180deg,#f59e0b,#d97706);
+    border-radius:0 3.5px 3.5px 0;
+  }
+  .gt .rl{
+    font-weight:600;color:var(--txt2);padding-right:9px;font-size:12.5px;
+    white-space:nowrap;
+  }
+  .cell{
+    width:19px;height:19px;border-radius:3.5px;display:block;
+    position:relative;margin:0 auto;
+  }
+  .cell.g{background:#22c55e}
+  .cell.y{background:#fbbf24}
+  .cell.r{background:#e2e8f0}
+  .cell.g.sel{outline:2.5px solid var(--blue);outline-offset:1px}
+  .cell.y.sel{outline:2.5px solid var(--blue);outline-offset:1px}
+  .cell:hover{transform:scale(1.22);z-index:5;box-shadow:0 2px 6px rgba(0,0,0,.18)}
+
+  /* events */
+  .ev{
+    border:1px solid var(--line);border-radius:8px;padding:11px 13px;
+    margin-bottom:9px;background:var(--card);
+  }
+  .ev.hit{border-color:var(--green);background:var(--green-l)}
+  .ev .top{display:flex;align-items:center;gap:9px;margin-bottom:6px;
+    flex-wrap:wrap}
+  .ev .tm{font-size:12px;color:var(--txt3);font-variant-numeric:tabular-nums}
+  .ev .bd{font-size:12.5px;color:var(--txt2);line-height:1.7}
+  .ev .bd b{color:var(--txt);font-weight:600}
+  .empty{text-align:center;color:var(--txt3);padding:28px 0;font-size:13px}
+  .tagb{
+    display:inline-block;padding:1px 8px;border-radius:999px;
+    font-size:11.5px;font-weight:600;
+  }
+  .tagb.g{background:var(--green-l);color:var(--green)}
+  .tagb.y{background:var(--amber-l);color:var(--amber)}
+  .tagb.n{background:#f1f5f9;color:var(--txt3)}
+
+  .note{
+    background:var(--amber-l);border-left:3px solid var(--amber);
+    padding:10px 13px;border-radius:0 7px 7px 0;font-size:12.5px;
+    color:#78350f;margin-bottom:16px;line-height:1.65;
+  }
+  .toast{
+    position:fixed;bottom:22px;left:50%;transform:translateX(-50%);
+    background:var(--txt);color:#fff;padding:10px 19px;border-radius:8px;
+    font-size:13.5px;box-shadow:0 6px 20px rgba(0,0,0,.2);z-index:100;
+    opacity:0;pointer-events:none;transition:.22s;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-6px)}
+
+  /* 悬浮一键预约按钮 */
+  .fabbar{
+    position:fixed;right:22px;bottom:22px;z-index:90;
+    display:flex;flex-direction:column;gap:10px;align-items:flex-end;
+  }
+  .fab{
+    display:flex;align-items:center;gap:7px;
+    padding:13px 19px;border-radius:999px;
+    background:linear-gradient(135deg,#16a34a,#0d9488);color:#fff;
+    font-size:14px;font-weight:700;text-decoration:none;
+    box-shadow:0 6px 22px rgba(22,163,74,.4);
+    transition:.16s;user-select:none;white-space:nowrap;
+  }
+  .fab:hover{filter:brightness(1.08);transform:translateY(-2px)}
+  .fab:active{transform:translateY(0)}
+  .fab.alt{
+    background:linear-gradient(135deg,#2563eb,#4f46e5);
+    box-shadow:0 6px 22px rgba(37,99,235,.36);
+    font-size:13.5px;padding:11px 17px;
+  }
+  @media(max-width:760px){.fab span{display:none}.fab{padding:14px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap hd">
+    <div>
+      <h1>香港身份证预约监控</h1>
+      <div class="sub">读配额 · 内容指纹判定 · 有票即提醒</div>
+    </div>
+    <div class="spacer"></div>
+    <span class="pill" id="stRun"><i class="dot"></i><span>连接中</span></span>
+    <span class="pill" id="stPoll">—</span>
+    <button class="b sec" onclick="refreshNow()">立即刷新</button>
+    <a class="b sec" href="/profile"
+       style="text-decoration:none;display:inline-flex;align-items:center;
+              padding:9px 17px;border-radius:7px;border:1.5px solid var(--line);
+              background:var(--card);color:var(--txt2);font-size:13.5px;
+              font-weight:600">📋 资料备忘</a>
+    <button class="b book" onclick="goBooking('new')"
+            title="官方预约入口">⚡ 立即预约</button>
+    <button class="b change" onclick="goBooking('change')"
+            title="更改或取消已有的预约">✎ 更改预约</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="maint" id="maintBar">
+    <b>⚠ 预约系统正在维护，暂时进不去</b>
+    <div class="mtxt" id="maintTxt">正在检查…</div>
+    <div class="mact">
+      <button onclick="goBooking('new')">仍然尝试预约</button>
+      <button onclick="goBooking('change')">尝试更改预约</button>
+      <button onclick="openDirect()">直连网关</button>
+      <button onclick="openFallback()">官方说明页</button>
+    </div>
+  </div>
+
+  <div class="guide" id="guideBar">
+    <span class="gx" onclick="hideGuide()">×</span>
+    <b id="guideTitle">已打开官方页面</b>
+    <div id="guideBody"></div>
+  </div>
+
+  <div class="stats">
+    <div class="st"><div class="k">已选办事处</div><div class="v" id="sOff">—</div></div>
+    <div class="st"><div class="k">可约日期</div><div class="v ok" id="sOpen">—</div></div>
+    <div class="st"><div class="k">最近一次新增</div><div class="v sm mut" id="sNew">暂无</div></div>
+    <div class="st"><div class="k">官方数据时间</div><div class="v sm mut" id="sTime">—</div></div>
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>① 盯哪些办事处</h2>
+        <div class="off" id="offList"></div>
+      </div>
+
+      <div class="card">
+        <h2>② 关注范围</h2>
+        <div class="fld">
+          <div class="lbl">时间范围
+            <span class="hint">官方窗口 = 未来 96 个工作天</span></div>
+          <div class="rng" id="withinBtns"></div>
+        </div>
+        <div class="fld">
+          <div class="lbl">轮询间隔 <span class="hint">点一下立即生效，不用点保存</span></div>
+          <div class="rng" id="ivBtns" style="margin-bottom:9px"></div>
+          <div style="display:flex;gap:9px;align-items:center">
+            <input type="number" id="interval" min="3" max="600" value="10"
+                   style="flex:1" onchange="setIntervalNow(this.value)">
+            <span style="font-size:12.5px;color:var(--txt3);white-space:nowrap">秒</span>
+            <div class="sw" id="swFixed"></div>
+            <span style="font-size:12.5px;color:var(--txt2);white-space:nowrap">
+              锁定</span>
+          </div>
+          <div class="hint" style="margin-top:7px;line-height:1.55">
+            <b>锁定开</b>：无论有没有变化都固定按这个间隔查，反应最快。<br>
+            <b>锁定关</b>：没变化时自动放宽到 15→25→40→60→90→120→180 秒
+            —— 更省接口，但可能错过放号。
+          </div>
+        </div>
+        <div class="fld">
+          <div class="lbl">什么程度才提醒</div>
+          <div class="rng" id="stateBtns"></div>
+        </div>
+        <div class="fld">
+          <div class="lbl">时段
+            <span class="hint">官方只分「一般 / 延长」两类，没有具体钟点</span></div>
+          <div class="rng" id="hoursBtns"></div>
+          <div class="hint" style="margin-top:7px;line-height:1.6">
+            延长服务时段是部分办事处加班开的场次（晚上居多），
+            选了「只看延长时段」就只在这个时段有票时提醒。
+          </div>
+        </div>
+        <div class="fld">
+          <div class="lbl">★ 指定日期必盯
+            <span class="hint">在下面日期表里点一下即可选中 / 取消</span></div>
+          <div class="foc" id="focusList"></div>
+          <div class="boost" id="boostTip"></div>
+          <div class="cal">
+            <div class="calhead">
+              <span>📅 日期表 · 点日期切换「必盯」</span>
+              <span style="margin-left:auto;display:flex;gap:7px;align-items:center">
+                <button class="rngb" id="calNone" style="padding:2px 9px;
+                  border:1.5px solid var(--line);background:var(--card);
+                  border-radius:6px;cursor:pointer;font-size:11.5px;
+                  font-family:inherit;color:var(--txt2)">清空</button>
+                <span id="calCount" style="color:var(--txt3)"></span>
+              </span>
+            </div>
+            <div class="calbody" id="calBody">
+              <div style="color:var(--txt3);font-size:12.5px">等待数据…</div>
+            </div>
+          </div>
+          <div class="callegend">
+            <span><i style="background:#16a34a"></i>已选为必盯</span>
+            <span><i style="background:#fff;border:1px solid var(--line)"></i>未选</span>
+            <span>格内小字 = 该日名额：
+              <b style="color:#16a34a">多</b> / <b style="color:#d97706">少</b></span>
+            <span style="margin-left:auto">未来 96 个工作天</span>
+          </div>
+          <details style="margin-top:9px">
+            <summary style="cursor:pointer;font-size:12.5px;color:var(--txt3);
+              user-select:none">手动输入日期…</summary>
+            <div style="display:flex;gap:7px;margin-top:8px">
+              <input type="text" id="focusIn"
+                     placeholder="如 12/01 或 2026-12-01"
+                     style="flex:1" onkeydown="if(event.key==='Enter')addFocus()">
+              <button class="b sec" onclick="addFocus()"
+                style="white-space:nowrap">加入</button>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>③ 怎么提醒</h2>
+        <div class="tog">
+          <div class="tx"><b>桌面弹窗</b><span>Windows 通知，有票时弹出</span></div>
+          <div class="sw" id="swDesktop"></div>
+        </div>
+        <div class="tog">
+          <div class="tx"><b>提示音</b><span>两声高低音，兼顾不吵</span></div>
+          <div class="sw" id="swSound"></div>
+        </div>
+        <div class="tog">
+          <div class="tx"><b>自动打开预约页</b><span>第一时间让你能动手</span></div>
+          <div class="sw" id="swOpen"></div>
+        </div>
+        <div class="tog">
+          <div class="tx"><b>只提醒新增</b><span>同一状态不重复刷屏</span></div>
+          <div class="sw" id="swOnlyNew"></div>
+        </div>
+        <div class="fld" style="margin-top:14px">
+          <div class="lbl">免打扰时段
+            <span class="hint">这段时间只记录不打扰</span></div>
+          <div style="display:flex;gap:9px;align-items:center">
+            <div class="sw" id="swQuiet"></div>
+            <input type="time" id="qFrom" value="23:00" style="flex:1">
+            <span style="color:var(--txt3)">至</span>
+            <input type="time" id="qTo" value="08:00" style="flex:1">
+          </div>
+        </div>
+        <div class="btns">
+          <button class="b pri" onclick="save()">保存配置</button>
+          <button class="b sec" onclick="testNotify()">测试提醒</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>配额总览 <span class="n" id="gridN">—</span>
+      <span style="margin-left:auto;font-weight:400;font-size:11.5px;
+        color:var(--txt3)">已选办事处加粗蓝框</span></h2>
+    <div class="lgd">
+      <span><i style="background:#22c55e"></i>尚有名额</span>
+      <span><i style="background:#fbbf24"></i>少量名额</span>
+      <span><i style="background:#e2e8f0"></i>已满</span>
+      <span>悬停格子可看日期</span>
+    </div>
+    <div class="gt" id="grid"></div>
+  </div>
+
+  <div class="card">
+    <h2>放号事件 <span class="n" id="evN">0</span></h2>
+    <div id="events"></div>
+  </div>
+
+  <div class="note">
+    <b>为什么不是真正的「实时」：</b>官方只有轮询接口，没有推送通道。
+    本页每轮间隔抓一次并比对<b>内容指纹</b>（状态算 MD5）——
+    时间戳会因缓存重算而乱跳（实测 5 分钟跳 24 次而数据纹丝不动），不能当依据。
+    指纹变了才算真变了。所以轮询间隔内发生的放号，你最多晚几秒知道。
+  </div>
+</div>
+
+<div class="fabbar">
+  <a class="fab alt" href="#" onclick="goBooking('change');return false"
+     title="更改 / 取消已有预约">✎<span>改预约</span></a>
+  <a class="fab" href="#" onclick="goBooking('new');return false"
+     title="打开预约网站（快捷键 B）">⚡<span>去预约</span></a>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const OFFICES = {
+  RHK:"港岛办事处", RKO:"九龙办事处", RTK:"将军澳办事处",
+  FTO:"火炭办事处", TMO:"屯门办事处", YLO:"元朗办事处"
+};
+const STATE_CN = {"quota-g":"尚有名额","quota-y":"少量名额","quota-r":"已满"};
+const RANK = {"quota-g":3,"quota-y":2,"quota-r":1};
+const WD = [0,30,60,90,120];
+let CFG = null, LAST = null;
+
+function parseD(s){
+  const p = String(s).split("/");
+  if(p.length !== 3) return null;
+  const dt = new Date(+p[2], +p[0]-1, +p[1]);
+  return isNaN(dt) ? null : dt;
+}
+const $ = id => document.getElementById(id);
+function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"),2400); }
+
+/* ---------- 渲染配置控件 ---------- */
+function buildOffices(sel){
+  $("offList").innerHTML = Object.entries(OFFICES).map(([k,v])=>`
+    <div class="of ${sel.includes(k)?"sel":""}" data-k="${k}">
+      <div class="box"><svg viewBox="0 0 12 12"><path d="M2 6l3 3 5-6"/></svg></div>
+      <div class="nm">${v}</div>
+      <div class="tag" data-tag="${k}"></div>
+    </div>`).join("");
+  document.querySelectorAll(".of").forEach(el=>{
+    el.onclick = ()=>{
+      const k = el.dataset.k;
+      let s = CFG.offices.slice();
+      s.includes(k) ? s = s.filter(x=>x!==k) : s.push(k);
+      if(!s.length){ toast("至少保留一个办事处"); return; }
+      CFG.offices = s;
+      document.querySelectorAll(".of").forEach(x=>
+        x.classList.toggle("sel", s.includes(x.dataset.k)));
+      render();
+    };
+  });
+}
+
+function buildWithin(v){
+  $("withinBtns").innerHTML = WD.map(d=>`
+    <button data-d="${d}" class="${v===d?"sel":""}">
+      ${d===0?"全部":d+"天内"}</button>`).join("");
+  document.querySelectorAll("#withinBtns button").forEach(b=>{
+    b.onclick = ()=>{ CFG.within_days = +b.dataset.d;
+      buildWithin(CFG.within_days);
+      $("sOpen").textContent = countOpen(CFG); };
+  });
+}
+
+function buildState(v){
+  const opts = [[2,"少量+充足"],[3,"只报充足"]];
+  $("stateBtns").innerHTML = opts.map(([n,t])=>`
+    <button data-v="${n}" class="${v===n?"sel":""}">${t}</button>`).join("");
+  document.querySelectorAll("#stateBtns button").forEach(b=>{
+    b.onclick = ()=>{ CFG.min_state = +b.dataset.v; buildState(CFG.min_state); };
+  });
+}
+
+/* 时段：any / regular(一般) / extended(延长) */
+function buildHours(v){
+  const opts = [["any","两种都报"],["regular","只看一般时段"],
+                ["extended","只看延长时段"]];
+  $("hoursBtns").innerHTML = opts.map(([n,t])=>`
+    <button data-v="${n}" class="${v===n?"sel":""}">${t}</button>`).join("");
+  document.querySelectorAll("#hoursBtns button").forEach(b=>{
+    b.onclick = ()=>{
+      CFG.service_hours = b.dataset.v;
+      buildHours(CFG.service_hours);
+      renderGrid();
+      save();
+    };
+  });
+}
+
+function tog(id, on, fn){
+  const e = $(id); e.classList.toggle("on", !!on);
+  e.onclick = ()=>{ on = !on; e.classList.toggle("on",on); fn(on); };
+  return on;
+}
+
+function buildToggles(c){
+  tog("swDesktop", c.notify.desktop,   v=>CFG.notify.desktop=v);
+  tog("swSound",   c.notify.sound,     v=>CFG.notify.sound=v);
+  tog("swOpen",    c.notify.open_browser, v=>CFG.notify.open_browser=v);
+  tog("swOnlyNew", c.notify.only_when_new, v=>CFG.notify.only_when_new=v);
+  tog("swQuiet",   c.quiet_hours.enabled,  v=>CFG.quiet_hours.enabled=v);
+  $("qFrom").value = c.quiet_hours.from;
+  $("qTo").value   = c.quiet_hours.to;
+  $("interval").value = c.interval;
+  tog("swFixed", c.fixed_interval !== false, v=>CFG.fixed_interval = v);
+  buildIv(c.interval);
+  buildHours(c.service_hours || "any");
+}
+
+/* 轮询预设：点了立刻 POST，不用点保存 */
+const IVS = [[3,"3秒"],[5,"5秒"],[10,"10秒"],[15,"15秒"],
+             [30,"30秒"],[60,"1分"],[180,"3分"]];
+function buildIv(v){
+  const eff = LAST && LAST.effective_interval;
+  $("ivBtns").innerHTML = IVS.map(([n,t])=>{
+    let cls = (+v===n) ? "sel" : "";
+    // 实际生效的档位额外标一个点，避免「我选了 3 秒但显示 10s」的困惑
+    let mark = (eff && +eff===n && +v!==n) ? " ●" : "";
+    return `<button data-v="${n}" class="${cls}">${t}${mark}</button>`;
+  }).join("");
+  $("ivBtns").querySelectorAll("button").forEach(b=>{
+    b.onclick = ()=>setIntervalNow(b.dataset.v);
+  });
+}
+async function setIntervalNow(v){
+  let n = Math.max(3, Math.min(600, parseInt(v,10) || 10));
+  CFG.interval = n;
+  $("interval").value = n;
+  buildIv(n);
+  try{
+    const r = await fetch("/api/config", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({interval:n, fixed_interval: CFG.fixed_interval !== false})
+    });
+    const j = await r.json();
+    if(j.ok) CFG.interval = j.config.interval;
+    toast(`轮询间隔已设为 ${n} 秒，立即生效`);
+  }catch(e){
+    toast("保存失败，控制台可能没连上");
+  }
+  load();
+}
+
+/* ---------- 计算 ---------- */
+function countOpen(c){
+  if(!LAST) return "—";
+  const cutoff = c.within_days
+    ? Date.now() + c.within_days*864e5 : null;
+  let n = 0;
+  for(const o of c.offices)
+    for(const d in (LAST.quota[o]||{})){
+      if(RANK[LAST.quota[o][d]] < 2) continue;
+      const t = parseD(d);
+      if(!t || t < new Date()) continue;
+      if(cutoff && t.getTime() > cutoff) continue;
+      n++;
+    }
+  return n;
+}
+
+/* ---------- 渲染 ---------- */
+function render(){
+  if(!CFG) return;
+  $("sOff").textContent = CFG.offices.length+" 个";
+  $("sOpen").textContent = countOpen(CFG);
+  // 各办事处可约数
+  const cutoff = CFG.within_days
+    ? new Date(Date.now()+CFG.within_days*864e5) : null;
+  for(const k in OFFICES){
+    const el = document.querySelector(`[data-tag="${k}"]`);
+    if(!el) continue;
+    if(!LAST){ el.textContent=""; continue; }
+    let n=0, earliest=null;
+    for(const d in (LAST.quota[k]||{})){
+      if(RANK[LAST.quota[k][d]] < 2) continue;
+      const dt=parseD(d);
+      if(!dt || dt < new Date()) continue;
+      if(cutoff && dt>cutoff) continue;
+      n++;
+      if(!earliest||dt<earliest) earliest=dt;
+    }
+    el.innerHTML = n ? `<b>${n}</b> 天${earliest?
+      ` · 最早 ${earliest.getMonth()+1}/${earliest.getDate()}`:""}` : "—";
+  }
+
+  renderGrid();
+  renderEvents();
+  renderFocus();
+  renderMaint();
+  // LAST 更新后重画预设按钮，让「实际生效」的标记跟上
+  if(CFG) buildIv(CFG.interval);
+  renderCal();
+}
+
+let GRID_MODE = "open";   // "open" = 从最早有票那天开始 | "start" = 从今天开始
+
+function renderGrid(){
+  if(!LAST || !LAST.quota) { $("grid").innerHTML=
+    '<div class="empty">等待数据…</div>'; return; }
+  const offices = Object.keys(OFFICES);
+  const dates = new Set();
+  for(const o of offices) for(const d in (LAST.quota[o]||{})) dates.add(d);
+  const sorted = [...dates].sort((a,b)=> parseD(a) - parseD(b));
+
+  // 视图切换：默认从「最早有票的日期」开始，否则最近日期全是已满，
+  // 一眼看过去全是灰的，什么信息都没有。
+  let from = 0;
+  if(GRID_MODE === "open"){
+    const idx = sorted.findIndex(d =>
+      offices.some(o => RANK[(LAST.quota[o]||{})[d]||"quota-r"] >= 2));
+    from = idx < 0 ? 0 : idx;
+  }
+  const show = sorted.slice(from, from + 30);
+  const range = sorted.length
+    ? sorted[0] + " ~ " + sorted[sorted.length-1] : "";
+
+  let h = `<div style="display:flex;align-items:center;gap:8px;
+      margin-bottom:10px;font-size:12.5px;color:var(--txt3)">
+      <button data-m="open" class="${GRID_MODE==="open"?"sel":""}"
+        style="padding:3px 10px;border:1.5px solid ${GRID_MODE==="open"?
+        "var(--blue)":"var(--line)"};background:${GRID_MODE==="open"?
+        "var(--blue-l)":"#fff"};color:${GRID_MODE==="open"?
+        "var(--blue)":"var(--txt2)"};border-radius:6px;cursor:pointer;
+        font-size:12.5px;font-family:inherit">从有票日开始</button>
+      <button data-m="start" class="${GRID_MODE==="start"?"sel":""}"
+        style="padding:3px 10px;border:1.5px solid ${GRID_MODE==="start"?
+        "var(--blue)":"var(--line)"};background:${GRID_MODE==="start"?
+        "var(--blue-l)":"#fff"};color:${GRID_MODE==="start"?
+        "var(--blue)":"var(--txt2)"};border-radius:6px;cursor:pointer;
+        font-size:12.5px;font-family:inherit">从今天开始</button>
+      <span style="margin-left:auto">窗口 ${range}</span></div>`;
+
+  h += `<table><tr><th></th>${show.map(d=>{
+    const p=d.split("/");
+    const foc = focusSet().has(p[0]+"/"+p[1]);
+    return `<th class="${foc?"foc":""}"
+      title="${foc?"★ 你指定的日期":""}">${p[0]}/${p[1]}${foc?"<i>★</i>":""}</th>`
+    }).join("")}</tr>`;
+  for(const o of offices){
+    h += `<tr><td class="rl" style="${CFG.offices.includes(o)?
+      "color:var(--blue)":""}">${OFFICES[o]}</td>`;
+    for(const d of show){
+      const rv = (LAST.quota_r||{})[o]?.[d] || "quota-non";
+      const kv = (LAST.quota_k||{})[o]?.[d] || "no-quotaK";
+      const s  = (LAST.quota[o]||{})[d] || "quota-r";
+      const cls = s.replace("quota-","");
+      const sel = CFG.offices.includes(o) && RANK[s]>=2 ? " sel":"";
+      const foc = focusSet().has(d.split("/")[0]+"/"+d.split("/")[1]) ? " foc":"";
+      const rHas = RANK[rv]>=2, kHas = RANK[kv]>=2;
+      // 两时段同时有票 -> 右半边加一道金色斜条
+      const both = (rHas && kHas) ? " both" : "";
+      const tip = `${OFFICES[o]} ${d}\n一般时段: ${STATE_CN[rv]||rv}`
+        + `\n延长时段: ${kv==="no-quotaK"?"当天不设":" "+(STATE_CN[kv]||kv)}`
+        + `${foc?"\n★ 你指定的日期（点击取消）":"\n点击设为必盯"}`;
+      h += `<td class="${foc}"><span class="cell ${cls}${sel}${both}" data-d="${d}"
+        title="${tip}" style="cursor:pointer"></span></td>`;
+    }
+    h += "</tr>";
+  }
+  h += "</table>";
+  if(sorted.length > show.length)
+    h += `<div style="font-size:12px;color:var(--txt3);margin-top:9px">
+      共 ${sorted.length} 个日期，此处显示第 ${from+1}–${from+show.length} 个
+      （切换上方按钮可看其他区间）</div>`;
+  $("grid").innerHTML = h;
+  $("gridN").textContent = show.length+" 天";
+  document.querySelectorAll("#grid button[data-m]").forEach(b=>{
+    b.onclick = ()=>{ GRID_MODE = b.dataset.m; renderGrid(); };
+  });
+  // 热力图格子也能点，直接切换「必盯」
+  document.querySelectorAll("#grid .cell[data-d]").forEach(c=>{
+    c.onclick = ()=>toggleFocus(c.dataset.d);
+  });
+}
+
+function renderEvents(){
+  const ev = (LAST && LAST.recent) || [];
+  $("evN").textContent = ev.length;
+  if(!ev.length){
+    $("events").innerHTML = `<div class="empty">
+      还没有检测到新名额<br>
+      <span style="font-size:12px">监控在后台运行，检测到变化会立刻出现在这里</span>
+    </div>`;
+    return;
+  }
+  $("events").innerHTML = ev.map(e=>`
+    <div class="ev hit">
+      <div class="top">
+        <span class="tagb g">新增 ${e.count} 个</span>
+        <span class="tm">${e.at}</span>
+      </div>
+      <div class="bd">${e.items.slice(0,6).map(i=>
+        `<b>${i.officeName}</b> ${i.dateObj}
+         ${i.hours==="extended"
+            ? `<span class="tagb y" title="延长服务时段">延长时段</span>`
+            : `<span class="tagb" style="background:#eef2ff;color:#4338ca"
+                title="一般服务时段">一般时段</span>`}
+         <span class="tagb ${i.state==="quota-g"?"g":"y"}">${i.stateCn}</span>`
+      ).join("<br>")}
+      ${e.items.length>6?`<br>… 另有 ${e.items.length-6} 个`:""}
+      </div>
+    </div>`).join("");
+}
+
+function renderStatus(){
+  if(!LAST) return;
+  const run = $("stRun");
+  if(LAST.running){
+    run.className = "pill on";
+    run.innerHTML = `<i class="dot live"></i><span>监控中</span>`;
+  } else {
+    run.className = "pill off";
+    run.innerHTML = `<i class="dot"></i><span>已停止</span>`;
+  }
+  $("stPoll").textContent =
+    `已查 ${LAST.polls} 次 · 间隔 ${LAST.effective_interval ?? LAST.next_check_in ?? "—"}s`;
+  $("sTime").textContent = (LAST.official_time||"—").replace(/^\d+\/\d+\/\d+\s*/,"");
+  const r = (LAST.recent||[])[0];
+  const sn = $("sNew");
+  if(r){
+    sn.textContent = r.at.slice(5);
+    sn.className = "v sm ok";
+  } else {
+    sn.textContent = "暂无"; sn.className = "v sm mut";
+  }
+}
+
+/* ---------- 通信 ---------- */
+async function refreshNow(){
+  const b = event.target; b.disabled = true; b.textContent = "刷新中…";
+  try{
+    await fetch("/api/refresh", {method:"POST"});
+    toast("已刷新");
+  }finally{
+    b.disabled = false; b.textContent = "立即刷新";
+    load();
+  }
+}
+
+async function save(){
+  CFG.interval = Math.max(3, +$("interval").value || 10);
+  CFG.quiet_hours.from = $("qFrom").value;
+  CFG.quiet_hours.to   = $("qTo").value;
+  if(!Array.isArray(CFG.focus_dates)) CFG.focus_dates = [];
+  const r = await fetch("/api/config", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify(CFG)
+  });
+  const j = await r.json();
+  toast(j.ok ? "配置已保存" : (j.error||"保存失败"));
+  if(j.ok){ CFG = j.config; load(); }
+}
+
+/* ---------- 两种入口：预约 / 更改预约 ----------
+ * 官方只有一个票据网关（getTicketGet?svcId=579）；
+ * 站内的 makeAppointment / ropChangeCancelAppointment 等页面**必须带 ticket**，
+ * 直接访问一律「404 当前页面找不到」。所以两个按钮都走同一个网关，
+ * 靠下面的指引条告诉你进去后点哪一个。
+ */
+const BOOKING_FALLBACK_DEFAULT =
+  "https://www.gov.hk/tc/residents/immigration/idcard/hkic/bookregidcard.htm";
+
+const INTENTS = {
+  new: {
+    label: "立即预约",
+    pick: "预约",
+    why: "新办、换领、补领身份证",
+    need: "证明文件号码 + 出生年月日 + 4 位查询编号（自选）",
+    steps: [
+      "点导航里的 <span class='hit'>「预约」</span>（第 1 个）",
+      "选申请类别与人数 → 选证明文件类别",
+      "输入证明文件号码、出生年月日",
+      "输入自选的 4 位查询编号（<b>记死它</b>）",
+      "选办事处 / 日期 / 时段 → 填电邮 → 递交",
+    ],
+  },
+  change: {
+    label: "更改预约",
+    pick: "更改／取消预约",
+    why: "改期、换办事处、取消已有的预约",
+    need: "证明文件号码 + 当初自设的 4 位查询编号",
+    steps: [
+      "点导航里的 <span class='hit'>「更改／取消预约」</span>（第 2 个）",
+      "输入证明文件号码 + 4 位查询编号",
+      "选出要更改的那笔预约",
+      "重新选办事处 / 日期 / 时段",
+      "确认后收新的确认书（<b>改期最早只能到下一个工作天</b>）",
+    ],
+  },
+};
+
+function bookingUrl(){
+  return (LAST && LAST.booking_url)
+    || "https://www.gov.hk/sc/apps/immdicbooking2.htm";
+}
+function directUrl(){
+  return (LAST && LAST.booking_direct)
+    || "https://entry.es2.immd.gov.hk/surgecontrol_extend/ticket/"
+     + "getTicketGet?svcId=57A&language=zh&country=CN";
+}
+function fallbackUrl(){
+  return (LAST && LAST.booking_fallback)
+    || "https://www.gov.hk/tc/residents/immigration/idcard/hkic/bookregidcard.htm";
+}
+
+function renderMaint(){
+  const bar = $("maintBar"); if(!bar) return;
+  const m = LAST && LAST.maintenance;
+  if(m && m.on){
+    bar.classList.add("on");
+    const resume = m.resume
+      ? `预计 <b>${m.resume}</b> 恢复（香港时间）`
+      : "恢复时间未知";
+    $("maintTxt").innerHTML =
+      `${resume}。在此之前点任何一个入口都会跳到维护公告页。<br>`
+      + `<span style="opacity:.75">配额数据仍在更新，监控不受影响 —— `
+      + `维护结束后若有票，照常提醒。</span>`;
+  }else{
+    bar.classList.remove("on");
+  }
+}
+
+function showGuide(intent){
+  const g = INTENTS[intent] || INTENTS.new;
+  const bar = $("guideBar"); if(!bar) return;
+  bar.classList.add("on");
+  $("guideTitle").textContent = `已打开官方页面 · 请点「${g.pick}」`;
+  $("guideBody").innerHTML =
+    `<div style="margin-bottom:6px">你要办的是：<b>${g.why}</b>。`
+    + `进去后请按这个顺序点：</div>`
+    + `<ol>${g.steps.map(s => `<li>${s}</li>`).join("")}</ol>`
+    + `<div style="margin-top:7px;opacity:.8">📋 需要准备好：${g.need}`
+    + `　<a href="/profile" style="color:#1d4ed8;font-weight:700">`
+    + `打开资料备忘 →</a></div>`
+    + `<div style="margin-top:8px;padding-top:8px;`
+    + `border-top:1px solid rgba(37,99,235,.18);font-size:12px;opacity:.85">`
+    + `跳转慢或卡在政府一站通？试 `
+    + `<a href="#" onclick="openDirect();return false" `
+    + `style="color:#1d4ed8;font-weight:700">直连官方网关</a>`
+    + `（跳过跳转壳页）</div>`;
+}
+
+function hideGuide(){
+  $("guideBar").classList.remove("on");
+}
+
+async function goBooking(intent){
+  const kind = (intent === "change") ? "change" : "new";
+  const url = bookingUrl();
+  let opened = false;
+  try{
+    const w = window.open(url, "_blank");
+    opened = !!(w && !w.closed);
+  }catch(e){ /* 弹窗被拦，走服务端 */ }
+
+  let mt = null;
+  try{
+    const r = await fetch("/api/open-booking", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({url, intent: kind})
+    });
+    const j = await r.json();
+    mt = j.maintenance;
+  }catch(e){ /* 本地服务不可达时静默 */ }
+
+  if(mt && mt.on){
+    // 维护中也显示指引：等恢复后你仍需要知道该点哪个按钮
+    showGuide(kind);
+    toast(mt.resume
+      ? `系统维护中，预计 ${mt.resume} 恢复 — 先看下面的操作指引`
+      : "系统维护中，暂时无法进入 — 先看下面的操作指引");
+    return;
+  }
+  showGuide(kind);
+  toast(opened
+    ? `已打开 · 进去后点「${INTENTS[kind].pick}」`
+    : `已唤起浏览器 · 进去后点「${INTENTS[kind].pick}」`);
+}
+
+function openDirect(){
+  const u = directUrl();
+  window.open(u, "_blank");
+  fetch("/api/open-booking", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({url: u})
+  }).catch(()=>{});
+  toast("已打开直连网关（跳过政府一站通跳转）");
+}
+
+function openFallback(){
+  const u = fallbackUrl();
+  window.open(u, "_blank");
+  fetch("/api/open-booking", {
+    method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({url: u})
+  }).catch(()=>{});
+  toast("已打开官方说明页");
+}
+
+/* 快捷键：B = 立即预约，C = 更改预约，R = 刷新 */
+document.addEventListener("keydown", e=>{
+  if(e.target.matches("input,select,textarea")) return;
+  const k = e.key.toLowerCase();
+  if(k === "b"){ e.preventDefault(); goBooking("new"); }
+  else if(k === "c"){ e.preventDefault(); goBooking("change"); }
+  else if(k === "r"){ e.preventDefault(); refreshNow(); }
+});
+
+/* ---------- 指定日期必盯：日期表 ---------- */
+function focusSet(){
+  const s = new Set();
+  for(const d of (CFG.focus_dates||[])){
+    const p = String(d).split("/");
+    if(p.length===3) s.add(p[0]+"/"+p[1]);
+  }
+  return s;
+}
+function focusDaysLeft(){
+  return (LAST && LAST.focus_left !== undefined) ? LAST.focus_left : null;
+}
+
+/* 官方 96 个工作天，按月分组的完整日期表 */
+function allDates(){
+  const s = new Set();
+  for(const o in LAST.quota) for(const d in LAST.quota[o]) s.add(d);
+  return [...s].sort((a,b)=> parseD(a) - parseD(b));
+}
+
+/* 某天在「已盯办事处」里最好的状态 */
+function bestState(d){
+  let best = "quota-r";
+  for(const o of (CFG.offices||[])){
+    const v = (LAST.quota[o]||{})[d];
+    if(v && (RANK[v]||0) > (RANK[best]||0)) best = v;
+  }
+  return best;
+}
+
+function renderCal(){
+  const body = $("calBody");
+  if(!body) return;
+  if(!CFG) return;
+  if(!LAST || !LAST.quota || !Object.keys(LAST.quota).length){
+    body.innerHTML = '<div style="color:var(--txt3);font-size:12.5px">等待数据…</div>';
+    return;
+  }
+  const dates = allDates();
+  if(!dates.length){
+    body.innerHTML = '<div style="color:var(--txt3);font-size:12.5px">暂无日期</div>';
+    return;
+  }
+  const foc = focusSet();
+  const today = new Date(); today.setHours(0,0,0,0);
+  // 按 月份 分行
+  const byMonth = {};
+  for(const d of dates){
+    const p = d.split("/");
+    (byMonth[p[0]] = byMonth[p[0]] || []).push(d);
+  }
+  let h = "";
+  for(const m in byMonth){
+    h += `<div class="mrow"><span class="mlab">${m}月</span>`;
+    for(const d of byMonth[m]){
+      const p = d.split("/");
+      const key = p[0]+"/"+p[1];
+      const dt = parseD(d);
+      const isToday = dt && +dt === +today;
+      const wknd = dt && (dt.getDay()===0 || dt.getDay()===6);
+      const st = bestState(d);
+      const av = st==="quota-g" ? '<span class="av g">多</span>'
+               : st==="quota-y" ? '<span class="av y">少</span>' : "";
+      const on = foc.has(key);
+      h += `<button class="dchip${on?" on":""}${wknd?" wknd":""}${isToday?" today":""}"
+        data-d="${d}" title="${key} · ${wknd?"周末":""}${isToday?" · 今天":""} · ${STATE_CN[st]||st}">
+        ${p[1]}${av}</button>`;
+    }
+    h += `</div>`;
+  }
+  body.innerHTML = h;
+  body.querySelectorAll(".dchip").forEach(b=>{
+    b.onclick = ()=>toggleFocus(b.dataset.d);
+  });
+  $("calCount").textContent = `已选 ${foc.size} / ${dates.length}`;
+  const cl = $("calNone");
+  if(cl) cl.onclick = ()=>{
+    if(!(CFG.focus_dates||[]).length){ toast("本来就没选"); return; }
+    CFG.focus_dates = [];
+    renderCal(); renderFocus(); renderGrid();
+    toast("已清空指定日期");
+  };
+}
+
+async function toggleFocus(d){
+  if(!Array.isArray(CFG.focus_dates)) CFG.focus_dates = [];
+  const p = String(d).split("/");
+  const full = `${p[0]}/${p[1]}/${p[2]}`;
+  const i = CFG.focus_dates.indexOf(full);
+  if(i >= 0){
+    CFG.focus_dates.splice(i, 1);
+  }else{
+    if(CFG.focus_dates.length >= 20){ toast("最多 20 个"); return; }
+    CFG.focus_dates.push(full);
+  }
+  renderCal(); renderFocus(); renderGrid();
+  // 立刻落盘，不用点保存
+  try{
+    const r = await fetch("/api/config", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({focus_dates: CFG.focus_dates})
+    });
+    const j = await r.json();
+    if(j.ok){
+      CFG.focus_dates = j.config.focus_dates;
+      renderCal(); renderFocus(); renderGrid();
+      const n = CFG.focus_dates.length;
+      toast(n ? `已必盯 ${n} 个日期，立即生效` : "已取消全部指定日期");
+      load();
+    }
+  }catch(e){ toast("保存失败，控制台可能没连上"); }
+}
+
+function renderFocus(){
+  const box = $("focusList"); if(!box) return;
+  const left = focusDaysLeft();
+  const list = CFG.focus_dates||[];
+  if(!list.length){
+    box.innerHTML = "";
+  }else{
+    box.innerHTML = list.map(d=>{
+      const p = String(d).split("/");
+      const imm = left!==null && left<=3;
+      const dd = left!==null
+        ? (left===0?"就是今天":left===1?"明天":`还有 ${left} 天`) : "";
+      return `<span class="fchip ${imm?"imminent":""}">★ ${p[0]}/${p[1]}
+        <span class="dd">${dd}</span>
+        <span class="x" data-d="${d}" title="移除">×</span></span>`;
+    }).join("");
+    box.querySelectorAll(".x").forEach(x=>{
+      x.onclick = ()=>toggleFocus(x.dataset.d);
+    });
+  }
+  const tip = $("boostTip");
+  if(tip){
+    const eff = LAST && LAST.effective_interval;
+    if(left!==null && left<=14 && list.length){
+      const b = left<=1?3:left<=3?5:left<=7?8:10;
+      const setIv = CFG.interval;
+      tip.className = "boost on";
+      if(eff && eff < setIv){
+        tip.innerHTML = `⚡ 指定日临近（距 ${left} 天），轮询已提速：`
+          + `你设的 <b>${setIv} 秒</b> → 实际 <b>${eff} 秒</b>（不受退避影响）。`;
+      }else if(eff && eff === setIv){
+        tip.innerHTML = `⚡ 指定日临近（距 ${left} 天），提速档为 ${b} 秒，`
+          + `但你设的 <b>${setIv} 秒</b>更快，按 <b>${eff} 秒</b> 执行。`;
+      }else{
+        tip.innerHTML = `⚡ 指定日临近（距 ${left} 天），当前按 `
+          + `<b>${eff ?? setIv} 秒</b> 执行。`;
+      }
+    }else{
+      tip.className = "boost";
+    }
+  }
+}
+function addFocus(){
+  const inp = $("focusIn");
+  const raw = (inp.value||"").trim();
+  if(!raw){ toast("先填个日期"); return; }
+  const parts = raw.split(/[\/,\s;，、]+/).filter(Boolean);
+  let added = 0, last = null;
+  for(const p of parts){
+    if(!/^\d{1,4}[\/\-\.]\d{1,2}([\/\-\.]\d{2,4})?$/.test(p)) continue;
+    const norm = p.replace(/\./g,"/").replace(/-/g,"/");
+    const q = norm.split("/");
+    const full = q.length===3 ? `${q[0]}/${q[1]}/${q[2]}` : norm;
+    if(!Array.isArray(CFG.focus_dates)) CFG.focus_dates = [];
+    if(CFG.focus_dates.includes(full)) continue;
+    CFG.focus_dates.push(full); added++; last = full;
+  }
+  if(!added){ toast("日期格式看不懂，试试 12/01"); return; }
+  inp.value = "";
+  // 交给后端规整格式（补年份等），再刷新
+  toggleFocus(last);
+}
+
+async function testNotify(){
+  toast("正在发送测试提醒…请看屏幕中央");
+  const r = await fetch("/api/test-notify", {method:"POST"});
+  const j = await r.json();
+  if(j.ok){
+    toast(`已发出 — ${j.how}`);
+  }else{
+    toast(`★ 失败：${j.how||"未知原因"}`);
+  }
+}
+
+async function load(){
+  const s = await (await fetch("/api/state")).json();
+  if(!CFG){
+    CFG = s.config;
+    buildOffices(CFG.offices);
+    buildWithin(CFG.within_days);
+    buildState(CFG.min_state);
+    buildToggles(CFG);
+  }
+  LAST = s;
+  renderStatus();
+  render();
+}
+
+load();
+setInterval(load, 5000);
+</script>
+</body>
+</html>

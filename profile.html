@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>预约资料备忘 · HKID</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#fff; --line:#e3e6ea; --line2:#eef0f3;
+    --txt:#1a1d21; --txt2:#4b5563; --txt3:#8b95a1;
+    --blue:#2563eb; --blue-l:#eff5ff; --green:#16a34a;
+    --warn:#b45309; --warnbg:#fffbeb; --danger:#dc2626;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg);color:var(--txt);
+    font-family:"Microsoft YaHei UI","Microsoft YaHei","Segoe UI",
+      -apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK SC",sans-serif;
+    font-size:14px;line-height:1.55;padding:24px 16px 60px;
+  }
+  .wrap{max-width:880px;margin:0 auto}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:16px;
+    flex-wrap:wrap}
+  h1{font-size:19px;font-weight:800;letter-spacing:-.2px}
+  .sub{font-size:12.5px;color:var(--txt3);margin-top:2px}
+  .spacer{flex:1}
+  a.back{
+    padding:8px 15px;border-radius:7px;border:1.5px solid var(--line);
+    background:var(--card);color:var(--txt2);text-decoration:none;
+    font-size:13px;font-weight:600;transition:.13s;
+  }
+  a.back:hover{border-color:var(--blue);color:var(--blue)}
+
+  /* 安全提示 */
+  .sec{
+    padding:13px 16px;border-radius:9px;margin-bottom:16px;
+    background:var(--warnbg);border:1px solid #fde68a;color:var(--warn);
+    font-size:12.5px;line-height:1.7;
+  }
+  .sec b{color:#92400e}
+  .sec code{background:#fff;padding:1px 5px;border-radius:4px;
+    border:1px solid #fde68a;font-size:11.5px}
+
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:11px;
+    padding:18px 20px;margin-bottom:14px;
+  }
+  .card h2{
+    font-size:13.5px;font-weight:700;margin-bottom:4px;
+    display:flex;align-items:center;gap:7px;
+  }
+  .card .step{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:19px;height:19px;border-radius:50%;background:var(--blue);
+    color:#fff;font-size:11px;font-weight:700;flex-shrink:0;
+  }
+  .card .hint{font-size:12px;color:var(--txt3);font-weight:400;
+    margin-bottom:14px;display:block;margin-left:26px}
+
+  .row{display:flex;gap:12px;margin-bottom:13px;flex-wrap:wrap}
+  .fld{flex:1;min-width:190px}
+  .fld.full{flex:1 1 100%}
+  .fld label{
+    display:block;font-size:12px;color:var(--txt2);margin-bottom:5px;
+    font-weight:600;
+  }
+  .fld .tip{font-size:11.5px;color:var(--txt3);font-weight:400;
+    margin-left:5px}
+  .subtip{font-size:11.5px;color:var(--txt3);margin-top:5px;line-height:1.6}
+
+  /* 学生专用卡片 */
+  .card.student{
+    background:linear-gradient(180deg,#f0fdf4,#fff 60%);
+    border-color:rgba(22,163,74,.3);
+  }
+  .card.student .step{
+    background:linear-gradient(135deg,#16a34a,#0d9488);
+  }
+  .card.student h2{color:#15803d}
+  input,select,textarea{
+    width:100%;padding:9px 11px;border:1.5px solid var(--line);
+    border-radius:7px;font-size:13.5px;font-family:inherit;
+    background:var(--card);color:var(--txt);transition:.13s;
+  }
+  input:focus,select:focus,textarea:focus{
+    outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.1);
+  }
+  input.mono{font-family:ui-monospace,Consolas,"Courier New",monospace;
+    letter-spacing:.5px}
+  textarea{resize:vertical;min-height:64px;line-height:1.6}
+  .birth{display:flex;gap:8px}
+  .birth input{flex:1;min-width:0}
+  .birth .u{display:flex;align-items:center;font-size:12px;
+    color:var(--txt3);flex-shrink:0}
+
+  .btns{display:flex;gap:9px;flex-wrap:wrap;margin-top:4px}  button.b{
+    padding:10px 18px;border:none;border-radius:7px;font-size:13.5px;
+    font-family:inherit;font-weight:600;cursor:pointer;transition:.13s;
+  }
+  button.b.pri{background:var(--blue);color:#fff}
+  button.b.pri:hover{background:#1d4ed8}
+  button.b.sec{background:var(--card);color:var(--txt2);
+    border:1.5px solid var(--line)}
+  button.b.sec:hover{border-color:var(--blue);color:var(--blue)}
+  button.b.dgr{background:#fff;color:var(--danger);
+    border:1.5px solid rgba(220,38,38,.35)}
+  button.b.dgr:hover{background:#fef2f2}
+  button.b:disabled{opacity:.5;cursor:not-allowed}
+
+  /* 汇总清单 */
+  .summary{
+    background:#0f172a;color:#e2e8f0;border-radius:11px;padding:18px 20px;
+    margin-bottom:14px;display:none;
+  }
+  .summary.on{display:block}
+  .summary h3{font-size:13px;color:#94a3b8;font-weight:600;
+    margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .sline{
+    display:flex;align-items:baseline;gap:10px;padding:7px 0;
+    border-bottom:1px solid rgba(255,255,255,.07);font-size:13.5px;
+  }
+  .sline:last-child{border-bottom:none}
+  .sline .k{color:#94a3b8;width:132px;flex-shrink:0;font-size:12.5px}
+  .sline .v{
+    color:#f1f5f9;font-weight:600;font-family:ui-monospace,Consolas,monospace;
+    letter-spacing:.4px;word-break:break-all;flex:1;
+  }
+  .sline .cp{
+    background:rgba(255,255,255,.1);border:none;color:#cbd5e1;
+    font-size:11px;padding:3px 9px;border-radius:5px;cursor:pointer;
+    font-family:inherit;flex-shrink:0;
+  }
+  .sline .cp:hover{background:rgba(255,255,255,.2);color:#fff}
+
+  .toast{
+    position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(8px);
+    background:#111827;color:#fff;padding:11px 22px;border-radius:9px;
+    font-size:13.5px;box-shadow:0 6px 20px rgba(0,0,0,.2);z-index:100;
+    opacity:0;pointer-events:none;transition:.22s;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-6px)}
+
+  .saved{font-size:12px;color:var(--txt3);margin-left:auto}
+  @media(max-width:640px){
+    .row{flex-direction:column;gap:10px}
+    .sline .k{width:100px;font-size:11.5px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>预约资料备忘</h1>
+      <div class="sub">把预约时要填的东西先存好，抢到号时照抄，不用现场翻证件</div>
+    </div>
+    <div class="spacer"></div>
+    <span class="saved" id="savedAt"></span>
+    <a class="back" href="/">← 回监控台</a>
+  </header>
+
+  <div class="sec">
+    <b>⚠ 这里存的是身份证明文件号码，属敏感信息。</b><br>
+    只保存在这台电脑的 <code>profile.json</code>（明文），<b>不联网、不上传、不写日志</b>。
+    共用电脑请用完点「清除资料」。想更安全就让浏览器自动填充、别在这里存。
+  </div>
+
+  <!-- ① 申请类别 -->
+  <div class="card">
+    <h2><span class="step">1</span>申请类别与人数</h2>
+    <span class="hint">官方流程第一步是选申请类别及数目</span>
+    <div class="row">
+      <div class="fld">
+        <label>申请类别</label>
+        <select id="category">
+          <option value="">— 请选择 —</option>
+          <option>首次登记身份证 - 持有效签证／进入许可的新来港人士（就读）</option>
+          <option>首次登记身份证 - 持有效签证／进入许可的新来港人士（就业）</option>
+          <option>首次登记申领身份证</option>
+          <option>换领身份证（旧款换智能身份证）</option>
+          <option>补领身份证（遗失／毁损／污损）</option>
+          <option>更改身份证登记资料</option>
+          <option>十八岁或以上人士申领成人身份证</option>
+          <option>十一至十七岁人士申领儿童身份证</option>
+        </select>
+      </div>
+      <div class="fld">
+        <label>同行申请人数<span class="tip">同一预约最多 4 人</span></label>
+        <select id="applicants">
+          <option value="1">1 人</option>
+          <option value="2">2 人</option>
+          <option value="3">3 人</option>
+          <option value="4">4 人</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② 证明文件 -->
+  <div class="card">
+    <h2><span class="step">2</span>证明文件</h2>
+    <span class="hint">官方流程第二步：选证明文件类别，再输入号码</span>
+    <div class="row">
+      <div class="fld">
+        <label>证明文件类别<span class="tip">内地学生选「旅行证件」</span></label>
+        <select id="doc_type">
+          <option value="">— 请选择 —</option>
+          <option>旅行证件（港澳通行证／护照）</option>
+          <option>香港身份证</option>
+          <option>香港出生证明书（1995-11-06 或以后登记）</option>
+        </select>
+      </div>
+      <div class="fld">
+        <label>证明文件号码</label>
+        <input type="text" id="doc_no" class="mono"
+               placeholder="如 A123456(7) 或 护照号" autocomplete="off">
+      </div>
+    </div>
+    <div class="row">
+      <div class="fld full">
+        <label>姓名备注<span class="tip">官方不收集，只帮你自己认人</span></label>
+        <input type="text" id="name_note" placeholder="如 本人 / 儿子 / 母亲">
+      </div>
+    </div>
+  </div>
+
+  <!-- ②b 学生签证资料（内地来港学生专用） -->
+  <div class="card student">
+    <h2><span class="step">★</span>内地来港学生专用</h2>
+    <span class="hint">凭学生签证首次办身份证必填这两项，官方表单位置不同，单独列出来</span>
+    <div class="row">
+      <div class="fld">
+        <label>港澳通行证 — 只要后 6 位
+          <span class="tip">官方明确「仅需填写旅行证件最后六位数字」</span></label>
+        <input type="text" id="permit_last6" class="mono" maxlength="16"
+               placeholder="如 345678，或粘完整号码自动取后6位"
+               autocomplete="off">
+        <div class="subtip">填完整号码没用，官方只收后 6 位。</div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="fld full">
+        <label>学生 e-Visa 档案编号
+          <span class="tip">官方叫「签证／进入许可申请档案编号」</span></label>
+        <input type="text" id="evisa_ref" class="mono"
+               placeholder="从 e-Visa PDF 上复制，粘完记得核对" autocomplete="off">
+        <div class="subtip">
+          在 e-Visa 电子签证 PDF 上找 <b>File Reference No.</b>／申请档案编号。
+          <b style="color:#b45309">复制过来常带空格或换行，已自动帮你去掉，但仍请核对一遍。</b>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ 出生日期 -->
+  <div class="card">
+    <h2><span class="step">3</span>出生日期</h2>
+    <span class="hint">官方流程第三步：输入出生年份及日子</span>
+    <div class="row">
+      <div class="fld full">
+        <label>出生年月日
+          <span class="tip" style="color:#b45309">官方表单<b>没有月份</b>，只填「日」和「年」</span></label>
+        <div class="birth">
+          <input type="text" id="birth_d" class="mono" placeholder="日 15"
+                 inputmode="numeric" maxlength="2">
+          <span class="u">日</span>
+          <input type="text" id="birth_y" class="mono" placeholder="年 1990"
+                 inputmode="numeric" maxlength="4">
+          <span class="u">年</span>
+          <span style="display:flex;align-items:center;gap:6px;margin-left:8px">
+            <input type="text" id="birth_m" class="mono" placeholder="月"
+                   inputmode="numeric" maxlength="2"
+                   style="width:52px;opacity:.65">
+            <span class="u" style="color:var(--txt3)">月（仅备忘）</span>
+          </span>
+        </div>
+        <div class="subtip">
+          官方表单只有「出生年份」和「出生日子」两格，<b>月份不填</b>。
+          月份留在这里只是方便你自己核对资料，抄表时跳过。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ 查询编号 -->
+  <div class="card">
+    <h2><span class="step">4</span>查询编号<span class="tip"
+      style="font-weight:400;font-size:11.5px;color:var(--txt3)">
+      自选 4 位数字</span></h2>
+    <span class="hint">日后更改／取消／翻查预约都要用它，<b>千万别忘</b></span>
+    <div class="row">
+      <div class="fld">
+        <label>4 位数字</label>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="query_code" class="mono" placeholder="1234"
+                 inputmode="numeric" maxlength="4" style="flex:1">
+          <button class="b sec" onclick="randCode()"
+                  style="white-space:nowrap;padding:9px 13px;font-size:12.5px">
+            随机生成</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑤ 电邮 + 备忘 -->
+  <div class="card">
+    <h2><span class="step">5</span>电邮提示与备注</h2>
+    <span class="hint">预约日期前 2 天会发电邮提示；可留空</span>
+    <div class="row">
+      <div class="fld full">
+        <label>接收提示的电邮</label>
+        <input type="email" id="email" class="mono"
+               placeholder="you@example.com" autocomplete="off">
+      </div>
+    </div>
+    <div class="row">
+      <div class="fld full">
+        <label>其他备忘<span class="tip">要带的文件原件、当天交通等</span></label>
+        <textarea id="notes"
+          placeholder="例：带旧身份证正本、出生证明书、住址证明…"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- 操作 -->
+  <div class="btns" style="margin-bottom:16px">
+    <button class="b pri" onclick="save()">保存资料</button>
+    <button class="b sec" onclick="showSummary()">生成对照清单</button>
+    <button class="b sec" onclick="copyAll()">一键复制全部</button>
+    <button class="b dgr" onclick="clearAll()">清除资料</button>
+  </div>
+
+  <!-- 汇总 -->
+  <div class="summary" id="summary">
+    <h3>📋 对照清单 <span style="font-weight:400;color:#64748b">
+      照这个顺序填，右侧直接复制</span></h3>
+    <div id="sbody"></div>
+  </div>
+
+  <div class="card" style="background:#fafbfc">
+    <h2 style="font-size:13px;margin-bottom:8px">官方填表顺序（照做即可）</h2>
+    <ol style="font-size:12.5px;color:var(--txt2);line-height:2;
+        padding-left:20px">
+      <li>阅读并同意声明</li>
+      <li>选申请类别及数目<span style="color:#15803d">（学生选「首次登记-持有效签证／进入许可的新来港人士(就读)」）</span></li>
+      <li>选证明文件类别<span style="color:#15803d">（学生选「旅行证件」）</span></li>
+      <li>输入证明文件号码<span style="color:#15803d">（学生：通行证后 6 位 + e-Visa 档案编号）</span></li>
+      <li>输入出生年份及日子<span style="color:#b45309">（没有月份这一格）</span></li>
+      <li>输入查询编号（4 位自选）</li>
+      <li>选办事处及预约日期</li>
+      <li>选预约时段</li>
+      <li>输入接收提示的电邮</li>
+      <li>递交 → 记下确认书</li>
+    </ol>
+    <div style="font-size:12px;color:var(--txt3);margin-top:10px;
+        padding-top:10px;border-top:1px solid var(--line2);line-height:1.8">
+      <b style="color:#15803d">内地学生到现场要带：</b>
+      预约确认截图、港澳通行证、学生电子签证、入境「小白条」。<br>
+      ⏱ 官方提示：整个过程约 5–10 分钟，页面有 <b>10 分钟</b>时限。<br>
+      ⚠ 资料填错的话，预约会被系统<b>自动删除</b>且不另行通知。<br>
+      📞 支援热线 (852) 3128 8668，每日 07:00–23:00（香港时间）。
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let P = null;
+
+/* 所有可存字段（与后端 PROFILE_FIELDS 对齐） */
+const FIELDS = ["category","doc_type","doc_no","permit_last6","evisa_ref",
+                "birth_y","birth_m","birth_d","query_code","email",
+                "name_note","notes"];
+
+const LABELS = {
+  category:"申请类别", doc_type:"证明文件类别", doc_no:"证明文件号码",
+  permit_last6:"通行证后6位", evisa_ref:"e-Visa 档案编号",
+  birth:"出生日+年", query_code:"查询编号", email:"电邮",
+  name_note:"姓名备注", applicants:"人数", notes:"备忘"
+};
+
+function toast(m){
+  const t = $("toast"); t.textContent = m; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove("show"), 2400);
+}
+
+async function load(){
+  try{
+    const r = await fetch("/api/profile", {cache:"no-store"});
+    P = await r.json();
+  }catch(e){ toast("读取失败，控制台可能没连上"); P = {}; }
+  for(const k of FIELDS){
+    const el = $(k); if(el) el.value = P[k] || "";
+  }
+  $("applicants").value = P.applicants || "1";
+  $("savedAt").textContent = P._updated ? "上次保存 " + P._updated : "";
+  if((P.doc_no||P.query_code||P.birth_y)){ /* 有资料就顺手显示清单 */
+    showSummary();
+  }
+}
+
+function collect(){
+  const o = {};
+  for(const k of FIELDS){
+    o[k] = ($(k).value || "").trim();
+  }
+  o.applicants = $("applicants").value;
+  return o;
+}
+
+async function save(){
+  const d = collect();
+  if(d.query_code && !/^\d{4}$/.test(d.query_code)){
+    toast("查询编号必须是 4 位数字"); $("query_code").focus(); return;
+  }
+  if(d.permit_last6 && !/^\d{6}$/.test(d.permit_last6)){
+    toast("通行证只填后 6 位数字，检查一下"); $("permit_last6").focus(); return;
+  }
+  if(!d.doc_no && !d.permit_last6 && !d.query_code){
+    toast("至少填个证件号或查询编号吧"); return;
+  }
+  try{
+    const r = await fetch("/api/profile", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(d)
+    });
+    const j = await r.json();
+    P = j;
+    // 后端清洗后的值回填，让用户看到「实际存了什么」
+    for(const k of FIELDS){
+      const el = $(k); if(el && j[k] !== undefined) el.value = j[k];
+    }
+    $("savedAt").textContent = "上次保存 " + (j._updated || "");
+    toast("已保存到本机 profile.json");
+    showSummary();
+  }catch(e){ toast("保存失败：" + e.message); }
+}
+
+function randCode(){
+  $("query_code").value = String(Math.floor(1000 + Math.random()*9000));
+  toast("已生成，记得保存");
+}
+
+function pad2(v){ return String(v||"").padStart(2,"0"); }
+
+/* 生成对照清单。顺序严格按官方表单：甲部类别/人数 → 乙部证件 →
+   学生两项 → 出生日+年 → 丙部查询编号 → 丁部验证码 → 电邮 */
+function rows(){
+  const d = collect();
+  // 官方只填「日 + 年」，月份不填。有月份时只在备忘里提示，不进清单。
+  const bDayYear = [d.birth_d && pad2(d.birth_d), d.birth_y]
+                    .filter(Boolean).join(" / ");
+  const isStudent = /就读|新来港/.test(d.category || "")
+                 || !!d.permit_last6 || !!d.evisa_ref;
+  const out = [
+    ["申请类别", d.category],
+    ["人数", d.applicants ? d.applicants + " 人" : ""],
+    ["证明文件类别", d.doc_type],
+    ["通行证后 6 位", d.permit_last6],
+    ["e-Visa 档案编号", d.evisa_ref],
+  ];
+  // 非学生才用完整证件号字段
+  if(!isStudent) out.push(["证明文件号码", d.doc_no]);
+  else if(d.doc_no) out.push(["证件号（备忘）", d.doc_no]);
+  out.push(
+    ["出生日 / 年", bDayYear],
+    ["查询编号", d.query_code],
+    ["电邮", d.email],
+    ["姓名备注", d.name_note],
+    ["备忘", d.notes],
+  );
+  return out.filter(([,v]) => v);
+}
+
+function showSummary(){
+  const rs = rows();
+  const box = $("summary");
+  if(!rs.length){ box.classList.remove("on"); return; }
+  box.classList.add("on");
+  $("sbody").innerHTML = rs.map(([k,v])=>`
+    <div class="sline">
+      <span class="k">${k}</span>
+      <span class="v">${esc(v)}</span>
+      <button class="cp" data-v="${esc(v)}">复制</button>
+    </div>`).join("");
+  $("sbody").querySelectorAll(".cp").forEach(b=>{
+    b.onclick = async ()=>{
+      await copy(b.dataset.v);
+      toast("已复制：" + b.dataset.v.slice(0,20));
+    };
+  });
+}
+
+function esc(s){
+  return String(s).replace(/[&<>"']/g, c =>
+    ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+async function copy(text){
+  try{
+    await navigator.clipboard.writeText(text);
+    return true;
+  }catch(e){
+    // 内嵌浏览器可能不给 clipboard 权限，退回 execCommand
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); }catch(_){}
+    document.body.removeChild(ta);
+    return true;
+  }
+}
+
+async function copyAll(){
+  const rs = rows();
+  if(!rs.length){ toast("还没有可复制的内容"); return; }
+  const d = collect();
+  const isStudent = /就读|新来港/.test(d.category || "")
+                 || !!d.permit_last6 || !!d.evisa_ref;
+  let txt = "【香港身份证预约资料】\n"
+    + rs.map(([k,v]) => `${k}：${v}`).join("\n")
+    + "\n\n填表顺序：类别 → 人数 → 证明文件类别 → "
+    + (isStudent ? "通行证后6位 → e-Visa档案编号 → " : "证件号 → ")
+    + "出生日/年 → 查询编号 → 验证码 → 办事处/日期/时段 → 电邮";
+  if(isStudent){
+    txt += "\n\n※ 内地学生注意："
+      + "\n· 通行证只填最后 6 位数字"
+      + "\n· 出生日期只填「日」和「年」，月份不填"
+      + "\n· e-Visa 档案编号粘贴后请核对一遍"
+      + "\n· 到场记得带：预约截图、港澳通行证、学生签证、入境小白条";
+  }
+  await copy(txt);
+  toast("已复制全部 " + rs.length + " 项");
+}
+
+async function clearAll(){
+  if(!confirm("确定清除全部已保存资料？此操作不可撤销。")) return;
+  try{
+    await fetch("/api/profile", {method:"DELETE"});
+    for(const k of FIELDS){
+      const el = $(k); if(el) el.value = "";
+    }
+    $("applicants").value = "1";
+    $("savedAt").textContent = "";
+    $("summary").classList.remove("on");
+    toast("已清除");
+  }catch(e){ toast("清除失败：" + e.message); }
+}
+
+// 输入时实时刷新清单
+document.addEventListener("input", e=>{
+  // 通行证后 6 位：只允许数字；粘完整号码（C12345678）时取**后** 6 位
+  if(e.target.id === "permit_last6"){
+    const raw = e.target.value;
+    const digits = raw.replace(/\D/g, "");
+    const v = digits.length > 6 ? digits.slice(-6) : digits;
+    if(v !== raw){ e.target.value = v; }
+  }
+  // e-Visa 编号：去掉空白，防止复制粘进来的换行
+  if(e.target.id === "evisa_ref"){
+    const raw = e.target.value;
+    const v = raw.replace(/\s+/g, "");
+    if(v !== raw){ e.target.value = v; }
+  }
+  if(e.target.matches("input,select,textarea")) showSummary();
+});
+
+load();
+</script>
+</body>
+</html>

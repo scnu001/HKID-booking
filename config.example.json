@@ -1,0 +1,22 @@
+{
+  "_说明": "复制为 config.json 后使用，或直接在控制台页面里改（改完会自动写回 config.json）",
+  "offices": ["RKO"],
+  "within_days": 90,
+  "min_state": 2,
+  "focus_dates": [],
+  "service_hours": "any",
+  "interval": 10,
+  "fixed_interval": true,
+  "notify": {
+    "desktop": true,
+    "sound": true,
+    "open_browser": true,
+    "only_when_new": true
+  },
+  "quiet_hours": {
+    "enabled": false,
+    "from": "23:00",
+    "to": "08:00"
+  },
+  "auto_start": true
+}
