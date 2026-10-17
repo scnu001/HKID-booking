@@ -52,6 +52,7 @@ DEFAULT_CONFIG = {
     "min_state": 2,                      # 2=少量名额也报, 3=只报充足
     "focus_dates": [],                   # 指定日期必盯( MM/DD/YYYY )，无视范围与门槛
     "service_hours": "any",              # any=两种时段都报 / regular / extended
+    "alert_gap": 90,                     # 两次提醒的最小间隔(秒)，防放号抖动刷屏
     "interval": 10,                      # 轮询间隔(秒)
     "fixed_interval": True,              # True=锁死不退避，False=无变化时自动放宽
     "notify": {
@@ -518,6 +519,7 @@ def _emit(cfg, new_items, now, prev_fp=None, fp=None, quiet=False):
                 ok, how = notifier.notify(
                     title, body,
                     sound=n.get("sound", True),
+                    cooldown=cfg.get("alert_gap", 90),
                     on_confirm=_go)
                 if ok:
                     log(f"提醒已发出 -> {how}", "ALERT")
@@ -885,7 +887,7 @@ class Handler(BaseHTTPRequestHandler):
             # 合并更新
             for k in ("offices", "within_days", "min_state", "interval",
                       "auto_start", "focus_dates", "fixed_interval",
-                      "service_hours"):
+                      "service_hours", "alert_gap"):
                 if k in data:
                     cfg[k] = data[k]
             if "notify" in data and isinstance(data["notify"], dict):
@@ -922,6 +924,11 @@ class Handler(BaseHTTPRequestHandler):
             cfg["fixed_interval"] = parse_bool(cfg.get("fixed_interval"), True)
             if cfg.get("service_hours") not in ("any", "regular", "extended"):
                 cfg["service_hours"] = "any"
+            try:
+                cfg["alert_gap"] = max(0, min(3600,
+                                              int(cfg.get("alert_gap", 90))))
+            except (TypeError, ValueError):
+                cfg["alert_gap"] = 90
             # 指定日期：规整格式 + 限量，解析不了的就丢掉
             fd = cfg.get("focus_dates")
             if isinstance(fd, str):

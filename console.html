@@ -542,6 +542,16 @@
           <div class="sw" id="swOnlyNew"></div>
         </div>
         <div class="fld" style="margin-top:14px">
+          <div class="lbl">提醒冷却
+            <span class="hint">秒 · 两次弹窗之间至少隔这么久</span></div>
+          <input type="number" id="alertGap" min="0" max="3600" value="90">
+          <div class="hint" style="margin-top:6px;line-height:1.6">
+            放号后名额会在「有」和「无」之间反复抖（有人抢了又退），
+            不设冷却会连弹好几次。<b>0 = 每次都提醒</b>；
+            想更稳可以设 120–180。
+          </div>
+        </div>
+        <div class="fld" style="margin-top:14px">
           <div class="lbl">免打扰时段
             <span class="hint">这段时间只记录不打扰</span></div>
           <div style="display:flex;gap:9px;align-items:center">
@@ -687,6 +697,7 @@ function buildToggles(c){
   $("qFrom").value = c.quiet_hours.from;
   $("qTo").value   = c.quiet_hours.to;
   $("interval").value = c.interval;
+  $("alertGap").value = (c.alert_gap === undefined ? 90 : c.alert_gap);
   tog("swFixed", c.fixed_interval !== false, v=>CFG.fixed_interval = v);
   buildIv(c.interval);
   buildHours(c.service_hours || "any");
@@ -934,6 +945,7 @@ async function refreshNow(){
 
 async function save(){
   CFG.interval = Math.max(3, +$("interval").value || 10);
+  CFG.alert_gap = Math.max(0, Math.min(3600, +$("alertGap").value || 0));
   CFG.quiet_hours.from = $("qFrom").value;
   CFG.quiet_hours.to   = $("qTo").value;
   if(!Array.isArray(CFG.focus_dates)) CFG.focus_dates = [];

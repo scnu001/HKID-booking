@@ -239,15 +239,11 @@ def _popup_async(title, message, timeout_ms=20000, verify=True, force=False,
 
     verify=True 时会用 FindWindowW 去**探测窗口是否真的出现在屏幕上**，
     探测到才返回 True。这是「真的可见」而不是「线程启动了」。
-    force=True 跳过防刷屏限制（测试按钮用）。
-    on_confirm: 用户点「确定」后执行的回调（复制剪贴板 + 打开预约页）。
+
+    冷却判断统一放在 notify() 里（那里才能连声音一起挡），
+    这里只保证不重复起线程。
     """
     with _lock:
-        # 防刷屏：默认 90 秒内不再弹。
-        # 放号时数据会有多轮抖动（有人抢/退），20 秒太短，会连着弹好几次。
-        gap = 0 if force else _min_gap
-        if not force and time.time() - _last_box["at"] < gap:
-            return False, f"{gap}秒内刚弹过，跳过"
         _last_box["at"] = time.time()
     t = threading.Thread(
         target=_safe_box, args=(title, message, timeout_ms, on_confirm),
@@ -315,14 +311,29 @@ def _toast(title, message):
 
 
 # ---------------------------------------------------------------- 对外接口
-def notify(title, message, sound=True, force=False, on_confirm=None):
+def notify(title, message, sound=True, force=False, on_confirm=None,
+           cooldown=None):
     """主入口：先响，再弹，最后补 toast。
 
     返回 (ok, 方式说明)。ok 的含义是「至少有一条通道真的触发了」，
     不再是「Popen 没报错」那种假回执。
-    force=True 用于测试按钮，跳过防刷屏限制。
+    force=True 用于测试按钮，跳过冷却。
     on_confirm: 用户点「确定」后执行（复制剪贴板 + 打开预约页）。
+    cooldown: 本次允许的冷却秒数，None 用全局 _min_gap。
+
+    ⚠️ 冷却必须在**这里**判断，不能只在 _popup_async 里判。
+    之前声音在冷却判断之前就播了，表现是「弹窗不重复但一直响」——
+    用户听到的仍然是「反复提醒」。
     """
+    gap = _min_gap if cooldown is None else float(cooldown)
+    with _lock:
+        if not force:
+            passed = time.time() - _last_box["at"]
+            if passed < gap:
+                return False, (f"冷却中（已过 {passed:.0f}s / {gap:.0f}s），"
+                               f"本次静默跳过")
+        _last_box["at"] = time.time()
+
     ways = []
     oks = []
 
@@ -332,7 +343,7 @@ def notify(title, message, sound=True, force=False, on_confirm=None):
         ways.append("声音:" + how)
         time.sleep(0.35)          # 让响声先出来，再弹窗
 
-    ok, how = _popup_async(title, message, force=force,
+    ok, how = _popup_async(title, message, force=True,   # 冷却已在上方判过
                            on_confirm=on_confirm)
     oks.append(ok)
     ways.append("弹窗:" + how)
