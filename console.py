@@ -83,6 +83,8 @@ STATE = {
     "quota_k": {},        # 延长服务时段
     "official_time": None,
     "recent": [],         # 最近事件
+    "focus_reported": {}, # {(office|date|hours): state} 指定日已提醒过的状态
+    "focus_last": {},     # 同上 key -> 上次提醒时间戳（60 秒去抖用）
     "notification_test": None,
 }
 
@@ -312,69 +314,139 @@ def poll_once(cfg, quiet=False):
         STATE["last_error"] = None
         STATE["fingerprint"] = fp
 
-    # 首次只建基线
+    # ---- A. 指定日期：**有号就报**，不依赖「状态变化」 ----
+    #
+    # 原先指定日期也走「状态变了才报」的逻辑，导致一个致命问题：
+    # 用户设了 10/30，而 10/30 本来就是 quota-y 且一直没变 —— 永远不提醒。
+    # 用户要的语义是「我指定的那天有号就告诉我」，不是「变了才告诉我」。
+    #
+    # 所以单独扫描：当前 rank>=2 且「这个状态还没报过」就报。
+    # 用 STATE["focus_reported"] 记住已报过的状态，避免每轮刷屏；
+    # 状态变好（y→g）会再报一次；变成没号则清标记，下次有号重新报。
+    focus = norm_focus(cfg)                    # {date: "MM/DD/YYYY"}
+    focus_ord = set(d.toordinal() for d in focus)
+    svc = cfg.get("service_hours", "any")      # any/regular/extended
+
+    new_items = []
+    seen = set()                               # 去重：(office,date,hours)
+
+    with _state_lock:
+        reported = dict(STATE.get("focus_reported") or {})
+        focus_last = dict(STATE.get("focus_last") or {})
+
+    if focus_ord:
+        now_ts = now.timestamp()
+        for oid in offices_cfg:
+            cr = quota_r.get(oid, {})
+            ck = quota_k.get(oid, {})
+            for ds in cr:
+                dt = W.parse_date(ds)
+                if not dt or dt.toordinal() not in focus_ord:
+                    continue
+                for hours, cur_s in (("regular", cr.get(ds)),
+                                     ("extended", ck.get(ds))):
+                    if svc == "regular" and hours != "regular":
+                        continue
+                    if svc == "extended" and hours != "extended":
+                        continue
+                    key = f"{oid}|{ds}|{hours}"
+                    rank = W.STATE_RANK.get(cur_s, 0)
+                    if rank < 2:               # 没号/已满 -> 清标记，等下次
+                        reported.pop(key, None)
+                        continue
+                    # 状态没变 -> 不报（避免每轮重复）
+                    if reported.get(key) == cur_s:
+                        continue
+                    reported[key] = cur_s
+                    # 放号后名额会在有/无之间反复闪（有人抢有人退），
+                    # 60 秒内同一个「办事处+日期+时段」最多提醒一次，
+                    # 否则会连续弹好几次，反而让人以为是卡了。
+                    if now_ts - focus_last.get(key, 0) < 60:
+                        continue
+                    focus_last[key] = now_ts
+                    seen.add((oid, ds, hours))
+                    new_items.append({
+                        "office": oid,
+                        "officeName": W.OFFICE_NAMES.get(oid, oid),
+                        "date": ds,
+                        "dateObj": dt.strftime("%Y-%m-%d"),
+                        "state": cur_s,
+                        "stateCn": W.STATE_CN.get(cur_s, cur_s),
+                        "hours": hours,
+                        "hoursCn": W.HOURS_CN.get(hours, hours),
+                        "focus": True,
+                    })
+        with _state_lock:
+            STATE["focus_reported"] = reported
+            STATE["focus_last"] = focus_last
+
+    # ---- 首次只建基线（普通日期的「变化」不比，但上面的指定日已经报过了） ----
     if prev_fp is None:
         with _state_lock:
             STATE["baseline_set"] = True
         if not quiet:
             log(f"基线建立 指纹={fp} 官方数据时间={d.get('lastUpdateTime')}")
+        if new_items:
+            return _emit(cfg, new_items, now, prev_fp, fp, quiet=True)
         return []
 
-    if prev_fp == fp:
-        return []
+    if prev_fp != fp:
+        # ---- B. 指纹变了：逐办事处、逐时段找新增 ----
+        min_rank = cfg["min_state"]
+        within = cfg["within_days"]
+        cutoff = (now.date() + timedelta(days=within)).toordinal() \
+                 if within else None
 
-    # ---- 指纹变了：逐办事处、逐时段找新增 ----
-    min_rank = cfg["min_state"]
-    within = cfg["within_days"]
-    cutoff = (now.date() + timedelta(days=within)).toordinal() if within else None
-    focus = norm_focus(cfg)          # {date: "MM/DD/YYYY"}
-    focus_ord = set(d.toordinal() for d in focus)
-    # 时段偏好：any=两种都报 / regular=只看一般时段 / extended=只看延长时段
-    svc = cfg.get("service_hours", "any")
+        for oid in offices_cfg:
+            cr = quota_r.get(oid, {})
+            ck = quota_k.get(oid, {})
+            orr = prev_r.get(oid, {})
+            okk = prev_k.get(oid, {})
+            for ds in cr:
+                dt = W.parse_date(ds)
+                is_focus = bool(dt and dt.toordinal() in focus_ord)
 
-    new_items = []
-    for oid in offices_cfg:
-        cr = quota_r.get(oid, {})
-        ck = quota_k.get(oid, {})
-        orr = prev_r.get(oid, {})
-        okk = prev_k.get(oid, {})
-        for ds in cr:
-            dt = W.parse_date(ds)
-            is_focus = bool(dt and dt.toordinal() in focus_ord)
-
-            # 分别比较两个时段，哪个有变化就报哪个（合并会漏报）
-            for hours, cur_s, old_s in (("regular", cr.get(ds), orr.get(ds)),
-                                        ("extended", ck.get(ds), okk.get(ds))):
-                if svc == "regular" and hours != "regular":
-                    continue
-                if svc == "extended" and hours != "extended":
-                    continue
-                rank = W.STATE_RANK.get(cur_s, 0)
-                if cur_s == old_s:
-                    continue
-                if is_focus:
-                    if rank < 2:          # 指定日也至少要「少量名额」
+                # 分别比较两个时段，哪个有变化就报哪个（合并会漏报）
+                for hours, cur_s, old_s in (("regular", cr.get(ds), orr.get(ds)),
+                                            ("extended", ck.get(ds), okk.get(ds))):
+                    if svc == "regular" and hours != "regular":
                         continue
-                else:
-                    if rank < min_rank:
+                    if svc == "extended" and hours != "extended":
                         continue
-                    if cutoff and dt and dt.toordinal() > cutoff:
+                    if cur_s == old_s:
                         continue
-                new_items.append({
-                    "office": oid,
-                    "officeName": W.OFFICE_NAMES.get(oid, oid),
-                    "date": ds,
-                    "dateObj": dt.strftime("%Y-%m-%d") if dt else ds,
-                    "state": cur_s,
-                    "stateCn": W.STATE_CN.get(cur_s, cur_s),
-                    "hours": hours,
-                    "hoursCn": W.HOURS_CN.get(hours, hours),
-                    "focus": is_focus,
-                })
+                    rank = W.STATE_RANK.get(cur_s, 0)
+                    if is_focus:
+                        # 指定日已在 A 段按「有号就报」处理过，这里避免重复
+                        if (oid, ds, hours) in seen:
+                            continue
+                        if rank < 2:
+                            continue
+                    else:
+                        if rank < min_rank:
+                            continue
+                        if cutoff and dt and dt.toordinal() > cutoff:
+                            continue
+                    new_items.append({
+                        "office": oid,
+                        "officeName": W.OFFICE_NAMES.get(oid, oid),
+                        "date": ds,
+                        "dateObj": dt.strftime("%Y-%m-%d") if dt else ds,
+                        "state": cur_s,
+                        "stateCn": W.STATE_CN.get(cur_s, cur_s),
+                        "hours": hours,
+                        "hoursCn": W.HOURS_CN.get(hours, hours),
+                        "focus": is_focus,
+                    })
 
     if not new_items:
         return []
 
+    return _emit(cfg, new_items, now, prev_fp, fp, quiet=quiet)
+
+
+def _emit(cfg, new_items, now, prev_fp=None, fp=None, quiet=False):
+    """记录事件 + 发提醒。抽出来是因为指定日期在「首次建基线」时也可能要报。"""
     new_items.sort(key=lambda x: (x["dateObj"], x["office"]))
     event = {
         "at": now.strftime("%Y-%m-%d %H:%M:%S"),
@@ -389,9 +461,13 @@ def poll_once(cfg, quiet=False):
     hist.insert(0, event)
     save_history(hist)
 
-    log(f"★★ 检测到 {len(new_items)} 个新名额 (指纹 {prev_fp} -> {fp})", "ALERT")
+    focus_n = sum(1 for x in new_items if x.get("focus"))
+    tag = f"（其中 {focus_n} 个是★指定日）" if focus_n else ""
+    log(f"★★ 检测到 {len(new_items)} 个名额{tag} "
+        f"(指纹 {prev_fp} -> {fp})", "ALERT")
     for it in new_items[:8]:
-        log(f"     {it['officeName']} {it['dateObj']} "
+        star = "★" if it.get("focus") else " "
+        log(f"    {star} {it['officeName']} {it['dateObj']} "
             f"[{it['hoursCn']}·{it['stateCn']}]", "ALERT")
 
     # 提醒
@@ -401,11 +477,13 @@ def poll_once(cfg, quiet=False):
             try:
                 first = new_items[0]
                 star = "★指定日 " if first.get("focus") else ""
+                title = ("★ 指定日期有名额！" if first.get("focus")
+                         else "香港身份证有名额！")
                 ok, how = notifier.notify(
-                    "香港身份证有名额！",
-                    f"新增 {len(new_items)} 个\n"
+                    title,
+                    f"{len(new_items)} 个名额\n"
                     f"{star}{first['officeName']} {first['dateObj']} "
-                    f"（{first['hoursCn']}）\n\n"
+                    f"（{first['hoursCn']}·{first['stateCn']}）\n\n"
                     f"（点确定后去抢，或按 B 键）",
                     sound=n.get("sound", True))
                 if ok:
@@ -771,6 +849,7 @@ class Handler(BaseHTTPRequestHandler):
 
         if p == "/api/config":
             cfg = load_config()
+            old_focus = list(cfg.get("focus_dates") or [])
             # 合并更新
             for k in ("offices", "within_days", "min_state", "interval",
                       "auto_start", "focus_dates", "fixed_interval",
@@ -824,6 +903,12 @@ class Handler(BaseHTTPRequestHandler):
             save_config(cfg)
             with _state_lock:
                 STATE["fingerprint"] = None      # 配置变了，重新建基线
+                # 指定日期列表变了 -> 清掉「已报过」记录，让新加的日期
+                # 即使本来就有号也能立刻提醒（否则改完没反应）
+                old_fd = set(old_focus or [])
+                if old_fd != set(cfg["focus_dates"]):
+                    STATE["focus_reported"] = {}
+                    STATE["focus_last"] = {}
             return self._json({"ok": True, "config": cfg})
 
         if p == "/api/refresh":

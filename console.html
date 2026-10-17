@@ -279,28 +279,46 @@
     font-size:12.5px;color:var(--txt2)}
   .lgd i{width:10px;height:10px;border-radius:2.5px;
     display:inline-block;margin-right:5px;vertical-align:-1px}
-  .gt{overflow-x:auto;padding-bottom:6px}
-  .gt table{border-collapse:separate;border-spacing:2px;font-size:12px}
-  .gt th{
-    font-weight:500;color:var(--txt3);font-size:10.5px;
-    padding:0 0 5px;text-align:center;white-space:nowrap;
-    width:23px;min-width:23px;
+  /* 热力图用 CSS Grid 而不是 table。
+     原因：table-layout:auto 下某一列表头折行会顶高**整行**，
+     加上指定日的 ★ 和绿框，两天连着时整张表会被推歪（实测行高 54px）。
+     Grid 的行高由 grid-auto-rows 固定，任何单元格都不会互相影响。 */
+  .gt{overflow-x:auto;padding:14px 0 6px}
+  .gt .hgrid{
+    display:grid;gap:2px 2px;align-items:center;
+    grid-auto-rows:22px;width:max-content;
   }
-  .gt td{padding:0;width:23px;min-width:23px}
-  .gt th.foc{color:#15803d;font-weight:800}
-  .gt th.foc i{font-style:normal;display:block;font-size:8px;
-    line-height:8px;color:#16a34a}
-  .gt td.foc{background:rgba(22,163,74,.09)}
-  .gt td.foc .cell{box-shadow:0 0 0 1.5px rgba(22,163,74,.5)}
+  .gt .hhead{                     /* 表头行 */
+    height:18px;font-size:9.5px;color:var(--txt3);font-weight:500;
+    display:flex;align-items:flex-end;justify-content:center;
+    white-space:nowrap;position:relative;
+  }
+  .gt .hhead.foc{color:#15803d;font-weight:800}
+  .gt .hhead.foc::before{         /* ★ 浮在上方，不占行 */
+    content:'★';position:absolute;top:-11px;left:50%;
+    transform:translateX(-50%);font-size:8px;line-height:1;
+    color:#16a34a;
+  }
+  /* 指定日的标记只做在表头上（★ + 下划线）。
+     不给整列格子加背景/描边 —— 两天连着时那一列会连成一串绿棒，很难看。 */
+  .gt .hhead.foc::after{
+    content:'';position:absolute;bottom:-3px;left:22%;right:22%;
+    height:2px;background:#16a34a;border-radius:1px;
+  }
+  .gt .hrl{                       /* 行首办事处名 */
+    font-weight:600;color:var(--txt2);font-size:12.5px;
+    white-space:nowrap;padding-right:9px;text-align:left;
+    display:flex;align-items:center;height:22px;
+  }
+  .gt .hcell{
+    height:22px;display:flex;align-items:center;justify-content:center;
+    border-radius:4px;
+  }
   /* 两个时段都有票：右半边金条 */
   .cell.both::after{
     content:'';position:absolute;right:0;top:0;bottom:0;width:5px;
     background:linear-gradient(180deg,#f59e0b,#d97706);
     border-radius:0 3.5px 3.5px 0;
-  }
-  .gt .rl{
-    font-weight:600;color:var(--txt2);padding-right:9px;font-size:12.5px;
-    white-space:nowrap;
   }
   .cell{
     width:19px;height:19px;border-radius:3.5px;display:block;
@@ -797,34 +815,44 @@ function renderGrid(){
         font-size:12.5px;font-family:inherit">从今天开始</button>
       <span style="margin-left:auto">窗口 ${range}</span></div>`;
 
-  h += `<table><tr><th></th>${show.map(d=>{
-    const p=d.split("/");
-    const foc = focusSet().has(p[0]+"/"+p[1]);
-    return `<th class="${foc?"foc":""}"
-      title="${foc?"★ 你指定的日期":""}">${p[0]}/${p[1]}${foc?"<i>★</i>":""}</th>`
-    }).join("")}</tr>`;
+  // 用 CSS Grid 布局：列宽固定 31px，行高固定 22px。
+  // 表头只写「日」，跨月那一列才写「月/日」（列宽放不下 5 个字符会折行）。
+  const fs = focusSet();
+  const cols = `78px repeat(${show.length}, 31px)`;
+  h += `<div class="hgrid" style="grid-template-columns:${cols}">`;
+  // 表头
+  h += `<div></div>`;
+  for(let i = 0; i < show.length; i++){
+    const p = show[i].split("/");
+    const prev = i > 0 ? show[i-1].split("/") : null;
+    const newMonth = !prev || prev[0] !== p[0];
+    const foc = fs.has(p[0]+"/"+p[1]);
+    h += `<div class="hhead${foc?" foc":""}"
+      title="${p[0]}/${p[1]}${foc?" ★ 你指定的日期":""}"
+      >${newMonth ? p[0]+"/"+p[1] : p[1]}</div>`;
+  }
+  // 每个办事处一行
   for(const o of offices){
-    h += `<tr><td class="rl" style="${CFG.offices.includes(o)?
-      "color:var(--blue)":""}">${OFFICES[o]}</td>`;
+    const on = CFG.offices.includes(o);
+    h += `<div class="hrl" style="${on?"color:var(--blue)":""}"
+      title="${OFFICES[o]}">${OFFICES[o]}</div>`;
     for(const d of show){
       const rv = (LAST.quota_r||{})[o]?.[d] || "quota-non";
       const kv = (LAST.quota_k||{})[o]?.[d] || "no-quotaK";
       const s  = (LAST.quota[o]||{})[d] || "quota-r";
       const cls = s.replace("quota-","");
-      const sel = CFG.offices.includes(o) && RANK[s]>=2 ? " sel":"";
-      const foc = focusSet().has(d.split("/")[0]+"/"+d.split("/")[1]) ? " foc":"";
-      const rHas = RANK[rv]>=2, kHas = RANK[kv]>=2;
-      // 两时段同时有票 -> 右半边加一道金色斜条
-      const both = (rHas && kHas) ? " both" : "";
+      const sel = on && RANK[s]>=2 ? " sel" : "";
+      const isFoc = fs.has(d.split("/")[0]+"/"+d.split("/")[1]);
+      const both = (RANK[rv]>=2 && RANK[kv]>=2) ? " both" : "";
       const tip = `${OFFICES[o]} ${d}\n一般时段: ${STATE_CN[rv]||rv}`
-        + `\n延长时段: ${kv==="no-quotaK"?"当天不设":" "+(STATE_CN[kv]||kv)}`
-        + `${foc?"\n★ 你指定的日期（点击取消）":"\n点击设为必盯"}`;
-      h += `<td class="${foc}"><span class="cell ${cls}${sel}${both}" data-d="${d}"
-        title="${tip}" style="cursor:pointer"></span></td>`;
+        + `\n延长时段: ${kv==="no-quotaK"?"当天不设":(STATE_CN[kv]||kv)}`
+        + `${isFoc?"\n★ 你指定的日期（点击取消）":"\n点击设为必盯"}`;
+      h += `<div class="hcell${isFoc?" foc":""}">
+        <span class="cell ${cls}${sel}${both}" data-d="${d}"
+          title="${tip}" style="cursor:pointer"></span></div>`;
     }
-    h += "</tr>";
   }
-  h += "</table>";
+  h += `</div>`;
   if(sorted.length > show.length)
     h += `<div style="font-size:12px;color:var(--txt3);margin-top:9px">
       共 ${sorted.length} 个日期，此处显示第 ${from+1}–${from+show.length} 个
