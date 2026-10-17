@@ -449,7 +449,10 @@ def norm_focus(cfg):
         if not s:
             continue
         dt = None
-        for f in ("%m/%d/%Y", "%m-%d-%Y", "%Y-%m-%d", "%m/%d", "%m-%d"):
+        # 覆盖用户/前端可能给的写法：
+        #   10/01/2026  10/01/26  2026/10/01  2026-10-01  10/01  10-01
+        for f in ("%m/%d/%Y", "%m/%d/%y", "%Y/%m/%d", "%m-%d-%Y",
+                  "%m-%d-%y", "%Y-%m-%d", "%m/%d", "%m-%d"):
             try:
                 dt = datetime.strptime(s, f)
                 break

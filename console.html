@@ -201,8 +201,18 @@
   .cal .calbody{padding:11px}
   .cal .mrow{display:flex;align-items:center;gap:5px;margin-bottom:7px;
     flex-wrap:wrap}
-  .cal .mlab{font-size:11px;color:var(--txt3);width:34px;flex-shrink:0;
-    font-weight:700}
+  .cal .mlab{font-size:11px;color:var(--txt3);width:42px;flex-shrink:0;
+    font-weight:700;white-space:nowrap}
+  /* 周几表头 */
+  .cal .calhd{margin-bottom:9px;padding-bottom:7px;
+    border-bottom:1px solid var(--line2)}
+  .cal .dowh{
+    width:30px;height:18px;flex-shrink:0;text-align:center;
+    font-size:11px;font-weight:700;color:var(--txt3);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .cal .dowh.we{color:#b91c1c;opacity:.75}
+  .dchip.empty{visibility:hidden;cursor:default}
   .dchip{
     width:30px;height:30px;border-radius:7px;border:1.5px solid var(--line);
     background:var(--card);cursor:pointer;font-size:11.5px;font-family:inherit;
@@ -1076,6 +1086,23 @@ function focusDaysLeft(){
   return (LAST && LAST.focus_left !== undefined) ? LAST.focus_left : null;
 }
 
+/* 单个日期距今多少天。之前每个 chip 都用全局 focus_left（最近的日期），
+   导致多个指定日时全部显示同一个「还有 N 天」。必须各自算。 */
+function daysUntil(d){
+  const p = String(d).split("/").map(Number);
+  if(p.length < 3 || !p[0] || !p[1] || !p[2]) return null;
+  const t = new Date(p[2], p[0] - 1, p[1]);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return Math.round((t - today) / 864e5);
+}
+function leftText(g){
+  if(g === null || g === undefined) return "";
+  if(g < 0) return "已过";
+  if(g === 0) return "就是今天";
+  if(g === 1) return "明天";
+  return `还有 ${g} 天`;
+}
+
 /* 官方 96 个工作天，按月分组的完整日期表 */
 function allDates(){
   const s = new Set();
@@ -1108,72 +1135,108 @@ function renderCal(){
   }
   const foc = focusSet();
   const today = new Date(); today.setHours(0,0,0,0);
-  // 按 月份 分行
-  const byMonth = {};
+
+  // 按周分行：以**周一**为一周起点，每行 7 格对齐「一 二 三 四 五 六 日」。
+  // 官方配额只含工作天（周一至周六），所以周日那格基本是空的 —— 留空占位，
+  // 这样比按月横排更容易看出「这周还剩几天有票」。
+  const weeks = new Map();     // key=周一那天的 y-m-d
   for(const d of dates){
-    const p = d.split("/");
-    (byMonth[p[0]] = byMonth[p[0]] || []).push(d);
+    const dt = parseD(d);
+    if(!dt) continue;
+    const dow = dt.getDay();                      // 0=周日
+    const offset = (dow === 0) ? 6 : dow - 1;     // 距周一的天数 0-6
+    const mon = new Date(dt.getFullYear(), dt.getMonth(),
+                         dt.getDate() - offset);
+    const key = `${mon.getFullYear()}-${mon.getMonth()}-${mon.getDate()}`;
+    if(!weeks.has(key)) weeks.set(key, { mon, cells: {} });
+    weeks.get(key).cells[offset] = d;
   }
-  let h = "";
-  for(const m in byMonth){
-    h += `<div class="mrow"><span class="mlab">${m}月</span>`;
-    for(const d of byMonth[m]){
+  // 按周一日期排序
+  const order = [...weeks.entries()].sort((a, b) => a[1].mon - b[1].mon);
+
+  const DOW = ["一","二","三","四","五","六","日"];
+  // 表头：周几
+  let h = `<div class="mrow calhd"><span class="mlab">周</span>`
+        + DOW.map((x, i) =>
+            `<span class="dowh${i>=6?" we":""}">${x}</span>`).join("")
+        + `</div>`;
+
+  for(const [, w] of order){
+    const m = w.mon;
+    const sun = new Date(m.getFullYear(), m.getMonth(), m.getDate() + 6);
+    const lab = `${m.getMonth()+1}/${m.getDate()}`;
+    h += `<div class="mrow"><span class="mlab" title="${lab} 那一周">${lab}</span>`;
+    for(let i = 0; i < 7; i++){
+      const d = w.cells[i];
+      if(!d){
+        h += `<span class="dchip empty"></span>`;
+        continue;
+      }
       const p = d.split("/");
       const key = p[0]+"/"+p[1];
       const dt = parseD(d);
       const isToday = dt && +dt === +today;
-      const wknd = dt && (dt.getDay()===0 || dt.getDay()===6);
+      const wknd = dt && dt.getDay() === 0;
       const st = bestState(d);
       const av = st==="quota-g" ? '<span class="av g">多</span>'
                : st==="quota-y" ? '<span class="av y">少</span>' : "";
       const on = foc.has(key);
+      const dowName = DOW[i];
       h += `<button class="dchip${on?" on":""}${wknd?" wknd":""}${isToday?" today":""}"
-        data-d="${d}" title="${key} · ${wknd?"周末":""}${isToday?" · 今天":""} · ${STATE_CN[st]||st}">
+        data-d="${d}" title="周${dowName} ${key} · ${STATE_CN[st]||st}${isToday?" · 今天":""}">
         ${p[1]}${av}</button>`;
     }
     h += `</div>`;
   }
+
   body.innerHTML = h;
-  body.querySelectorAll(".dchip").forEach(b=>{
+  body.querySelectorAll(".dchip[data-d]").forEach(b=>{
     b.onclick = ()=>toggleFocus(b.dataset.d);
   });
   $("calCount").textContent = `已选 ${foc.size} / ${dates.length}`;
   const cl = $("calNone");
-  if(cl) cl.onclick = ()=>{
-    if(!(CFG.focus_dates||[]).length){ toast("本来就没选"); return; }
-    CFG.focus_dates = [];
+  if(cl) cl.onclick = ()=>{ postFocus([]); };
+}
+
+/* 统一入口：把整批日期 POST 给后端规整（补年份/去重/排序），用返回值刷新。
+   任何涉及 focus_dates 的写操作都走这里，不要在本地手工拼字符串。 */
+async function postFocus(list){
+  try{
+    const r = await fetch("/api/config", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({focus_dates: list})
+    });
+    const j = await r.json();
+    if(!j.ok){ toast(j.error || "保存失败"); return false; }
+    CFG.focus_dates = j.config.focus_dates || [];
     renderCal(); renderFocus(); renderGrid();
-    toast("已清空指定日期");
-  };
+    toast(CFG.focus_dates.length
+      ? `已必盯 ${CFG.focus_dates.length} 个日期，立即生效`
+      : "已取消全部指定日期");
+    load();
+    return true;
+  }catch(e){
+    toast("保存失败，控制台可能没连上");
+    return false;
+  }
 }
 
 async function toggleFocus(d){
   if(!Array.isArray(CFG.focus_dates)) CFG.focus_dates = [];
   const p = String(d).split("/");
-  const full = `${p[0]}/${p[1]}/${p[2]}`;
-  const i = CFG.focus_dates.indexOf(full);
-  if(i >= 0){
-    CFG.focus_dates.splice(i, 1);
+  const key3 = p.length >= 3 ? `${p[0]}/${p[1]}/${p[2]}` : null;
+  const key2 = `${p[0]}/${p[1]}`;
+  const list = CFG.focus_dates.slice();
+  // 先按完整日期精确匹配，再退回「月/日」前缀匹配
+  let idx = key3 ? list.indexOf(key3) : -1;
+  if(idx < 0) idx = list.findIndex(v => String(v).startsWith(key2 + "/"));
+  if(idx >= 0){
+    list.splice(idx, 1);
   }else{
-    if(CFG.focus_dates.length >= 20){ toast("最多 20 个"); return; }
-    CFG.focus_dates.push(full);
+    if(list.length >= 20){ toast("最多 20 个"); return; }
+    list.push(key3 || key2);
   }
-  renderCal(); renderFocus(); renderGrid();
-  // 立刻落盘，不用点保存
-  try{
-    const r = await fetch("/api/config", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({focus_dates: CFG.focus_dates})
-    });
-    const j = await r.json();
-    if(j.ok){
-      CFG.focus_dates = j.config.focus_dates;
-      renderCal(); renderFocus(); renderGrid();
-      const n = CFG.focus_dates.length;
-      toast(n ? `已必盯 ${n} 个日期，立即生效` : "已取消全部指定日期");
-      load();
-    }
-  }catch(e){ toast("保存失败，控制台可能没连上"); }
+  await postFocus(list);
 }
 
 function renderFocus(){
@@ -1185,11 +1248,10 @@ function renderFocus(){
   }else{
     box.innerHTML = list.map(d=>{
       const p = String(d).split("/");
-      const imm = left!==null && left<=3;
-      const dd = left!==null
-        ? (left===0?"就是今天":left===1?"明天":`还有 ${left} 天`) : "";
+      const g = daysUntil(d);                 // 各日期自己算
+      const imm = g !== null && g >= 0 && g <= 3;
       return `<span class="fchip ${imm?"imminent":""}">★ ${p[0]}/${p[1]}
-        <span class="dd">${dd}</span>
+        <span class="dd">${leftText(g)}</span>
         <span class="x" data-d="${d}" title="移除">×</span></span>`;
     }).join("");
     box.querySelectorAll(".x").forEach(x=>{
@@ -1218,25 +1280,40 @@ function renderFocus(){
     }
   }
 }
-function addFocus(){
+
+/* 手动输入。支持：10/01、10-01、2026-10-01、2026/10/01、10/01/26
+   多个日期用逗号/分号/顿号/空格分隔。
+   ⚠️ 拆分只能用这些分隔符，**不能用 / 和 -** —— 那是日期自己的分隔符，
+      用它们拆会把 10/01 切成 ['10','01']，两个都匹配不上日期格式。 */
+async function addFocus(){
   const inp = $("focusIn");
   const raw = (inp.value||"").trim();
-  if(!raw){ toast("先填个日期"); return; }
-  const parts = raw.split(/[\/,\s;，、]+/).filter(Boolean);
-  let added = 0, last = null;
+  if(!raw){ toast("先填个日期，如 10/01"); return; }
+  const parts = raw.split(/[,;\s，、]+/).filter(Boolean);
+  const valid = [];
   for(const p of parts){
-    if(!/^\d{1,4}[\/\-\.]\d{1,2}([\/\-\.]\d{2,4})?$/.test(p)) continue;
-    const norm = p.replace(/\./g,"/").replace(/-/g,"/");
-    const q = norm.split("/");
-    const full = q.length===3 ? `${q[0]}/${q[1]}/${q[2]}` : norm;
-    if(!Array.isArray(CFG.focus_dates)) CFG.focus_dates = [];
-    if(CFG.focus_dates.includes(full)) continue;
-    CFG.focus_dates.push(full); added++; last = full;
+    const s = p.replace(/\./g,"/").replace(/-/g,"/");
+    // 月/日 或 月/日/年(2或4位) 或 年/月/日
+    if(/^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/.test(s)
+       || /^\d{4}\/\d{1,2}\/\d{1,2}$/.test(s)){
+      valid.push(s);
+    }
   }
-  if(!added){ toast("日期格式看不懂，试试 12/01"); return; }
-  inp.value = "";
-  // 交给后端规整格式（补年份等），再刷新
-  toggleFocus(last);
+  if(!valid.length){
+    toast("日期格式看不懂，试试 10/01 或 2026-10-01");
+    return;
+  }
+  if(!Array.isArray(CFG.focus_dates)) CFG.focus_dates = [];
+  const ok = await postFocus(CFG.focus_dates.concat(valid));
+  if(ok){
+    inp.value = "";
+    // 明确回报后端**实际**存了什么：只写「10/01」会被补年份，
+    // 若今年已过会推到明年 —— 不告诉用户就会以为存错了。
+    const n = CFG.focus_dates.length;
+    const shown = CFG.focus_dates.slice(0, 4)
+      .map(s => s.slice(0, 5)).join("、");
+    toast(`已加入（共 ${n} 个）：${shown}${n > 4 ? " …" : ""}`);
+  }
 }
 
 async function testNotify(){
