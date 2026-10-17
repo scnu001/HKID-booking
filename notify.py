@@ -73,6 +73,9 @@ _lock = threading.Lock()
 _last_box = {"at": 0.0}
 # 两次弹窗的最小间隔（秒）。放号后数据会有多轮抖动，太短会连续弹很多次。
 _min_gap = 90.0
+# 当前是否有弹窗正开着。有的话新的直接跳过 —— 否则用户会看到两个窗口叠在
+# 一起（MessageBox 是模态的，前一个没关时再弹会再开一个）。
+_popup_open = False
 
 
 # ---------------------------------------------------------------- 声音
@@ -256,7 +259,7 @@ def _popup_async(title, message, timeout_ms=20000, verify=True, force=False,
     探测到才返回 True。这是「真的可见」而不是「线程启动了」。
 
     冷却判断统一放在 notify() 里（那里才能连声音一起挡），
-    这里只保证不重复起线程。
+    这里只负责起线程。
     """
     with _lock:
         _last_box["at"] = time.time()
@@ -279,11 +282,15 @@ def _popup_async(title, message, timeout_ms=20000, verify=True, force=False,
 
 
 def _safe_box(title, message, timeout_ms, on_confirm=None):
+    global _popup_open
     try:
         _message_box_timeout(title, message, timeout_ms,
                              on_confirm=on_confirm)
     except Exception as e:
         print(f"[notify] 弹窗线程异常: {e}", file=sys.stderr)
+    finally:
+        with _lock:
+            _popup_open = False
 
 
 # ---------------------------------------------------------------- 附加 toast
@@ -341,12 +348,17 @@ def notify(title, message, sound=True, force=False, on_confirm=None,
     用户听到的仍然是「反复提醒」。
     """
     gap = _min_gap if cooldown is None else float(cooldown)
+    global _popup_open
     with _lock:
+        # 已有弹窗没关 -> 完全静默（不响、不弹、不 toast）
+        if _popup_open:
+            return False, "已有弹窗未关闭，跳过"
         if not force:
             passed = time.time() - _last_box["at"]
             if passed < gap:
                 return False, (f"冷却中（已过 {passed:.0f}s / {gap:.0f}s），"
                                f"本次静默跳过")
+        _popup_open = True
         _last_box["at"] = time.time()
 
     ways = []

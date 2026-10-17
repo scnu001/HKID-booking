@@ -543,13 +543,14 @@
           <div class="sw" id="swOnlyNew"></div>
         </div>
         <div class="fld" style="margin-top:14px">
-          <div class="lbl">提醒冷却
-            <span class="hint">秒 · 两次弹窗之间至少隔这么久</span></div>
+          <div class="lbl">相同内容重弹间隔
+            <span class="hint">秒 · 内容一样就不再弹</span></div>
           <input type="number" id="alertGap" min="0" max="3600" value="90">
           <div class="hint" style="margin-top:6px;line-height:1.6">
-            放号后名额会在「有」和「无」之间反复抖（有人抢了又退），
-            不设冷却会连弹好几次。<b>0 = 每次都提醒</b>；
-            想更稳可以设 120–180。
+            弹窗会对内容算一个指纹：<b>内容完全相同</b>（同样的办事处、日期、
+            时段、状态）就跳过，不重复弹。<br>
+            这段时间过了之后即使内容相同也会再提醒一次。
+            <b>0 = 每次都弹</b>。
           </div>
         </div>
         <div class="fld" style="margin-top:14px">

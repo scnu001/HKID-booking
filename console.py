@@ -86,6 +86,7 @@ STATE = {
     "recent": [],         # 最近事件
     "focus_reported": {}, # {(office|date|hours): state} 指定日已提醒过的状态
     "focus_last": {},     # 同上 key -> 上次提醒时间戳（60 秒去抖用）
+    "last_sound_ts": 0.0, # 上次响铃时间（声音限流用）
     "notification_test": None,
 }
 
@@ -476,6 +477,28 @@ def _emit(cfg, new_items, now, prev_fp=None, fp=None, quiet=False):
         n = cfg["notify"]
         if n.get("desktop"):
             try:
+                # ---- 内容签名：内容完全一样就不重复弹 ----
+                # 放号后名额会在有/无之间反复抖，同一批日期可能被反复检测到。
+                # 用「办事处+日期+时段+状态」排序后的 MD5 作为签名，
+                # 和上次弹过的相同且在 alert_gap 秒内 -> 直接跳过。
+                import hashlib
+                sig_src = "|".join(sorted(
+                    f"{it['office']}{it['dateObj']}{it['hours']}{it['state']}"
+                    for it in new_items))
+                sig = hashlib.md5(sig_src.encode()).hexdigest()[:16]
+                gap = cfg.get("alert_gap", 90)
+                with _state_lock:
+                    last_sig = STATE.get("last_alert_sig")
+                    last_ts = STATE.get("last_alert_ts", 0.0)
+                if sig == last_sig and (time.time() - last_ts) < gap:
+                    log(f"内容与上次相同（{sig}），{gap}s 内不重复弹窗", "INFO")
+                    with _state_lock:
+                        STATE["notification_test"] = "内容相同，已跳过"
+                    return new_items
+                with _state_lock:
+                    STATE["last_alert_sig"] = sig
+                    STATE["last_alert_ts"] = time.time()
+
                 first = new_items[0]
                 star = "★指定日 " if first.get("focus") else ""
                 title = ("★ 指定日期有名额！" if first.get("focus")
@@ -483,8 +506,15 @@ def _emit(cfg, new_items, now, prev_fp=None, fp=None, quiet=False):
                 body = (f"{len(new_items)} 个名额\n"
                         f"{star}{first['officeName']} {first['dateObj']} "
                         f"（{first['hoursCn']}·{first['stateCn']}）\n")
-                # 把资料备忘里要填的东西直接列在弹窗里，
-                # 这样不用切窗口翻资料，照着填就行
+                # 多于一条时，把其余几条也列出来
+                if len(new_items) > 1:
+                    for it in new_items[1:6]:
+                        body += (f"　· {it['officeName']} {it['dateObj']} "
+                                 f"{it['hoursCn']}·{it['stateCn']}\n")
+                    if len(new_items) > 6:
+                        body += f"　… 另有 {len(new_items)-6} 条\n"
+
+                # 资料备忘：直接列在弹窗里，不用切窗口翻
                 prof = load_profile()
                 clip_text = ""
                 memo = []
@@ -493,20 +523,20 @@ def _emit(cfg, new_items, now, prev_fp=None, fp=None, quiet=False):
                     memo.append(f"通行证后6位：{clip_text}")
                 if prof.get("evisa_ref"):
                     memo.append(f"e-Visa编号：{prof['evisa_ref']}")
-                bd = ""
                 if prof.get("birth_d") and prof.get("birth_y"):
-                    bd = f"{prof['birth_d']} / {prof['birth_y']}"
-                    memo.append(f"出生日/年：{bd}")
+                    memo.append(f"出生日/年：{prof['birth_d']} / "
+                                f"{prof['birth_y']}")
                 if prof.get("query_code"):
                     memo.append(f"查询编号：{prof['query_code']}")
                 if memo:
                     body += "\n" + "\n".join(memo) + "\n"
-                hint = ("点「确定」→ 自动复制后6位并打开预约页"
+
+                hint = ("点「确定」→ 复制后6位并打开预约页"
                         if clip_text else "点「确定」→ 打开预约页")
                 if not n.get("open_browser"):
                     hint = ("点「确定」→ 只复制后6位（预约页开关已关）"
                             if clip_text else "点「确定」→ 关闭窗口")
-                body += f"\n{hint}\n（点「取消」或 20 秒不操作则不跳转）"
+                body += f"\n{hint}\n（点「取消」则不跳转）"
 
                 def _go(_clip=clip_text, _open=bool(n.get("open_browser"))):
                     """用户点确定后：先复制号码，再（按开关）打开预约页。"""
@@ -526,15 +556,13 @@ def _emit(cfg, new_items, now, prev_fp=None, fp=None, quiet=False):
                 ok, how = notifier.notify(
                     title, body,
                     sound=n.get("sound", True),
-                    cooldown=cfg.get("alert_gap", 90),
                     on_confirm=_go)
                 if ok:
                     log(f"提醒已发出 -> {how}", "ALERT")
                     with _state_lock:
                         STATE["notification_test"] = f"成功: {how}"
                 elif "跳过" in how:
-                    # 90 秒冷却中：事件已记录，只是不重复弹窗，不是失败
-                    log(f"提醒冷却中，本次不重复弹窗 -> {how}", "INFO")
+                    log(f"本次不弹窗 -> {how}", "INFO")
                 else:
                     log(f"★ 提醒失败: {how}", "ERROR")
                     with _state_lock:
@@ -992,16 +1020,23 @@ class Handler(BaseHTTPRequestHandler):
                         except Exception as e:
                             log(f"[测试] 打开预约页失败: {e}", "ERROR")
 
-                    extra = ""
+                    extra_memo = []
                     if clip:
-                        extra = (f"\n\n资料里的通行证后6位：{clip}\n"
-                                 f"点确定后会复制它并打开预约页。")
+                        extra_memo.append(f"通行证后6位：{clip}")
+                    if prof.get("evisa_ref"):
+                        extra_memo.append(f"e-Visa编号：{prof['evisa_ref']}")
+                    if prof.get("birth_d") and prof.get("birth_y"):
+                        extra_memo.append(f"出生日/年：{prof['birth_d']} / "
+                                          f"{prof['birth_y']}")
+                    if prof.get("query_code"):
+                        extra_memo.append(f"查询编号：{prof['query_code']}")
+
+                    tb = "这是一条测试提醒\n\n看到窗口 + 听到提示音 = 提醒链路正常。"
+                    if extra_memo:
+                        tb += "\n\n" + "\n".join(extra_memo)
+                    tb += "\n\n点「确定」会复制号码并打开预约页（如果资料里有）。"
                     ok, how = notifier.notify(
-                        "香港身份证预约监控 · 测试",
-                        "这是一条测试提醒\n\n"
-                        "看到窗口 + 听到提示音 = 提醒链路正常。"
-                        + extra
-                        + "\n（20 秒后自动关闭）",
+                        "香港身份证预约监控 · 测试", tb,
                         sound=n.get("sound", True), force=True,
                         on_confirm=_test_go)
                 elif n.get("sound"):
