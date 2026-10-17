@@ -503,13 +503,20 @@ def _emit(cfg, new_items, now, prev_fp=None, fp=None, quiet=False):
                     body += "\n" + "\n".join(memo) + "\n"
                 hint = ("点「确定」→ 自动复制后6位并打开预约页"
                         if clip_text else "点「确定」→ 打开预约页")
+                if not n.get("open_browser"):
+                    hint = ("点「确定」→ 只复制后6位（预约页开关已关）"
+                            if clip_text else "点「确定」→ 关闭窗口")
                 body += f"\n{hint}\n（点「取消」或 20 秒不操作则不跳转）"
 
-                def _go(_clip=clip_text):
-                    """用户点确定后：先复制号码，再打开预约页。"""
+                def _go(_clip=clip_text, _open=bool(n.get("open_browser"))):
+                    """用户点确定后：先复制号码，再（按开关）打开预约页。"""
                     if _clip:
-                        notifier.set_clipboard(_clip)
-                        log(f"已复制通行证后6位到剪贴板", "ALERT")
+                        okc = notifier.set_clipboard(_clip)
+                        log(f"已复制通行证后6位到剪贴板 "
+                            f"({'成功' if okc else '失败'})", "ALERT")
+                    if not _open:
+                        log("「点确定后打开预约页」已关闭，不跳转", "INFO")
+                        return
                     try:
                         webbrowser.open(W.BOOKING_URL, new=2)
                         log(f"已打开预约页: {W.BOOKING_URL}", "ALERT")
@@ -966,14 +973,24 @@ class Handler(BaseHTTPRequestHandler):
                 if n.get("desktop"):
                     prof = load_profile()
                     clip = prof.get("permit_last6") or ""
+                    do_open = bool(n.get("open_browser"))
 
-                    def _test_go(_c=clip):
+                    def _test_go(_c=clip, _open=do_open):
+                        """与真实提醒完全一致的「点确定后」行为，便于验证。"""
                         if _c:
-                            notifier.set_clipboard(_c)
+                            okc = notifier.set_clipboard(_c)
+                            log(f"[测试] 已复制通行证后6位到剪贴板 "
+                                f"({'成功' if okc else '失败'})", "ALERT")
+                        if not _open:
+                            log("[测试] 「点确定后打开预约页」已关闭，不跳转",
+                                "INFO")
+                            return
                         try:
                             webbrowser.open(W.BOOKING_URL, new=2)
-                        except Exception:
-                            pass
+                            log(f"[测试] 已打开预约页: {W.BOOKING_URL}",
+                                "ALERT")
+                        except Exception as e:
+                            log(f"[测试] 打开预约页失败: {e}", "ERROR")
 
                     extra = ""
                     if clip:

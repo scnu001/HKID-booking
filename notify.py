@@ -57,7 +57,12 @@ if os.name == "nt":
         _user32 = None
 
 # ---- MessageBox 常量
+# 用 MB_OKCANCEL 而不是 MB_OK：
+#   MB_OK      超时返回 1（和「点确定」一模一样，无法区分！）
+#   MB_OKCANCEL 超时返回 32000、点确定 1、点取消 2 —— 能准确分辨
+# 这个差异是实测出来的：MB_OK 会让人误以为「没点确定也跳转了」。
 MB_OK = 0x00000000
+MB_OKCANCEL = 0x00000001
 MB_ICONWARNING = 0x00000030
 MB_ICONINFORMATION = 0x00000040
 MB_TOPMOST = 0x00040000
@@ -203,7 +208,7 @@ def _message_box_timeout(title, message, timeout_ms=20000, topmost=True,
     """
     if _user32 is None:
         return False, "non-windows"
-    flags = MB_OK | MB_ICONWARNING | MB_SETFOREGROUND
+    flags = MB_OKCANCEL | MB_ICONWARNING | MB_SETFOREGROUND
     if topmost:
         flags |= MB_TOPMOST | MB_SYSTEMMODAL
     try:
@@ -212,25 +217,35 @@ def _message_box_timeout(title, message, timeout_ms=20000, topmost=True,
         return False, "no MessageBoxTimeoutW"
     fn.argtypes = [wt.HWND, wt.LPCWSTR, wt.LPCWSTR, wt.UINT, wt.WORD, wt.DWORD]
     fn.restype = ctypes.c_int
+    t0 = time.time()
     try:
         r = fn(None, message, title, flags, 0, timeout_ms)
     except Exception as e:
         return False, f"{type(e).__name__}: {e}"
-    # MessageBox 返回值：IDOK=1、IDCANCEL=2、超时=32000（不是 0！）
-    # 早期版本误写成 `r == 0`，导致点确定永远不触发回调。
+    elapsed_ms = (time.time() - t0) * 1000
+
+    # MessageBox 返回值：IDOK=1、IDCANCEL=2、**超时=32000**。
+    # 注意：之前误以为超时也返回 1，导致「没点确定就跳转」。
+    # 实测纯净环境超时稳定返回 32000（耗时 ≈ timeout+60ms）；
+    # 只有在**多个弹窗重叠**时才出现过 1 秒内返回 1 的异常，
+    # 因此额外用耗时做一次兜底判断（明显短于超时才认为是真点击）。
     IDOK, IDCANCEL, TIMEOUT = 1, 2, 32000
-    if r == IDOK:
+    looked_like_timeout = elapsed_ms >= timeout_ms - 800
+    if r == IDOK and not looked_like_timeout:
         if on_confirm:
             try:
                 on_confirm()
             except Exception:
                 pass
-        return True, "用户点了确定"
+        return True, f"用户点了确定({elapsed_ms:.0f}ms)"
+    if r == IDOK and looked_like_timeout:
+        # 返回值是 1 但耗时等于超时 -> 按超时处理，不触发跳转
+        return True, f"疑似超时(返回1但耗时{elapsed_ms:.0f}ms)，不跳转"
     if r == IDCANCEL:
         return True, "用户点了取消"
     if r == TIMEOUT:
-        return True, "显示后超时自动关闭"
-    return True, f"返回 {r}"
+        return True, f"超时自动关闭({elapsed_ms:.0f}ms)"
+    return True, f"返回 {r}({elapsed_ms:.0f}ms)"
 
 
 def _popup_async(title, message, timeout_ms=20000, verify=True, force=False,
