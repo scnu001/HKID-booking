@@ -5,6 +5,8 @@
 数据来自官方「各人事登记办事处预约配额预览」的公开接口 —— 和你打开
 <https://www.gov.hk/sc/apps/bookidcardquota.htm> 看到的完全同一份。
 
+![控制台](docs/console.png)
+
 > ### ⚠️ 先说清楚这是什么、不是什么
 >
 > **这是只读监控工具，不会替你提交预约。**
@@ -113,6 +115,30 @@ powershell -File setup_task.ps1
 
 ---
 
+## 界面预览
+
+**指定日期必盯** —— 在 96 天日期表上点选，格内小字表示当天名额（多/少）
+
+![日期表](docs/cal.png)
+
+**时段维度** —— 区分一般服务时段与延长服务时段
+
+![时段](docs/hours.png)
+
+**预约资料备忘** —— 本地保存，含内地学生专用区块
+
+![资料备忘](docs/student.png)
+
+**两种官方入口 + 站内操作指引**
+
+![入口](docs/govhk-entry.png)
+
+**系统维护检测**
+
+![维护](docs/maint.png)
+
+---
+
 ## 技术要点
 
 ### 为什么必须用「内容指纹」
@@ -138,7 +164,6 @@ powershell -File setup_task.ps1
 > 需要票据 + 验证码，脚本拿不到。能到的最细粒度就是「一般 / 延长」。
 
 ### 官方入口的真实结构
-
 ```
 https://www.gov.hk/sc/apps/immdicbooking2.htm      ← 官方对外入口（跳转壳页）
   └─ 加载 immdicbooking2.js，只有一句：
